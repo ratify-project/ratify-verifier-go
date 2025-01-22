@@ -23,6 +23,7 @@ import (
 	"github.com/notaryproject/notation-go/verifier/trustpolicy"
 	"github.com/notaryproject/notation-go/verifier/truststore"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/ratify-project/ratify-go"
 )
 
 const (
@@ -64,6 +65,10 @@ func TestNewVerifier(t *testing.T) {
 	if err != nil || verifier == nil {
 		t.Fatalf("failed to create a new verifier: %v", err)
 	}
+	if _, ok := interface{}(verifier).(ratify.Verifier); !ok {
+		t.Fatalf("verifier does not implement ratify.Verifier")
+	}
+
 	if verifier.Name() != testVerifierName {
 		t.Fatalf("unexpected verifier name: %s, expect: %s", verifier.Name(), testVerifierName)
 	}

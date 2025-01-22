@@ -21,7 +21,7 @@ import (
 
 	"github.com/notaryproject/notation-go"
 	"github.com/notaryproject/notation-go/plugin"
-	notationVerifier "github.com/notaryproject/notation-go/verifier"
+	"github.com/notaryproject/notation-go/verifier"
 	"github.com/notaryproject/notation-go/verifier/trustpolicy"
 	"github.com/notaryproject/notation-go/verifier/truststore"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -32,29 +32,27 @@ import (
 const (
 	notationVerifierType          = "notation"
 	notationSignatureArtifactType = "application/vnd.cncf.notary.signature"
-	maxManifestSizeLimit          = 4 * 1024 * 1024  // 4 MiB
-	maxBlobSizeLimit              = 32 * 1024 * 1024 // 32 MiB
 )
 
 // NewVerifierOptions contains the options for creating a new Notation verifier.
 type NewVerifierOptions struct {
-	// Name is the name of the verifier. Required.
+	// Name is the instance name of the verifier to be created. Required.
 	Name string
 
 	// TrustPolicyDoc is a trustpolicy.json document. It should follow the spec:
-	// https://github.com/notaryproject/notation-go/blob/release-1.3/verifier/trustpolicy/oci.go#L29
+	// https://github.com/notaryproject/notation-go/blob/v1.3.0/verifier/trustpolicy/oci.go#L29
 	// Required.
 	TrustPolicyDoc *trustpolicy.Document
 
 	// TrustStore manages the certificates in the trust store. It should
 	// implement the truststore.X509TrustStore interface:
-	// https://github.com/notaryproject/notation-go/blob/release-1.3/verifier/truststore/truststore.go#L52
+	// https://github.com/notaryproject/notation-go/blob/v1.3.0/verifier/truststore/truststore.go#L52
 	// Required.
 	TrustStore truststore.X509TrustStore
 
 	// PluginManager manages the plugins installed for Notation verifier. It
 	// should implement the plugin.Manager interface:
-	// https://github.com/notaryproject/notation-go/blob/release-1.3/plugin/manager.go#L33
+	// https://github.com/notaryproject/notation-go/blob/v1.3.0/plugin/manager.go#L33
 	// Optional.
 	PluginManager plugin.Manager
 }
@@ -62,20 +60,20 @@ type NewVerifierOptions struct {
 // Verifier is a ratify.Verifier implementation that verifies Notation
 // signatures.
 type Verifier struct {
-	name        string
-	sigVerifier notation.Verifier
+	name     string
+	verifier notation.Verifier
 }
 
 // NewVerifier creates a new Notation verifier.
-func NewVerifier(opts *NewVerifierOptions) (ratify.Verifier, error) {
-	verifier, err := notationVerifier.New(opts.TrustPolicyDoc, opts.TrustStore, opts.PluginManager)
+func NewVerifier(opts *NewVerifierOptions) (*Verifier, error) {
+	verifier, err := verifier.New(opts.TrustPolicyDoc, opts.TrustStore, opts.PluginManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notation verifier: %w", err)
 	}
 
 	return &Verifier{
-		name:        opts.Name,
-		sigVerifier: verifier,
+		name:     opts.Name,
+		verifier: verifier,
 	}, nil
 }
 
@@ -114,25 +112,26 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	if outcome, err := v.verifySignature(ctx, opts.Subject, opts.SubjectDescriptor, signatureBlob, signatureDesc.MediaType); err != nil {
+	verifyOpts := notation.VerifierVerifyOptions{
+		SignatureMediaType: signatureDesc.MediaType,
+		ArtifactReference:  opts.Subject,
+	}
+	outcome, err := v.verifier.Verify(ctx, opts.SubjectDescriptor, signatureBlob, verifyOpts)
+	if err != nil {
 		result.Err = err
-	} else {
-		cert := outcome.EnvelopeContent.SignerInfo.CertificateChain[0]
-		result.Detail = map[string]string{
-			"Issuer": cert.Issuer.String(),
-			"SN":     cert.Subject.String(),
-		}
-		result.Description = "Notation signature verification succeeded"
+		return result, nil
 	}
 
+	cert := outcome.EnvelopeContent.SignerInfo.CertificateChain[0]
+	result.Detail = map[string]string{
+		"Issuer": cert.Issuer.String(),
+		"SN":     cert.Subject.String(),
+	}
+	result.Description = "Notation signature verification succeeded"
 	return result, nil
 }
 
 func (v *Verifier) getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) (ocispec.Descriptor, error) {
-	if artifactDesc.Size > maxManifestSizeLimit {
-		return ocispec.Descriptor{}, fmt.Errorf("signature manifest too large: %d bytes", artifactDesc.Size)
-	}
-
 	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
 	if err != nil {
 		return ocispec.Descriptor{}, fmt.Errorf("failed to fetch image manifest for artifact: %w", err)
@@ -142,18 +141,5 @@ func (v *Verifier) getSignatureBlobDesc(ctx context.Context, store ratify.Store,
 		return ocispec.Descriptor{}, fmt.Errorf("notation signature manifest requries exactly one signature envelope blob, got %d", len(manifest.Layers))
 	}
 
-	signatureDesc := manifest.Layers[0]
-	if signatureDesc.Size > maxBlobSizeLimit {
-		return ocispec.Descriptor{}, fmt.Errorf("signature blob too large: %d bytes", signatureDesc.Size)
-	}
-
-	return signatureDesc, nil
-}
-
-func (v *Verifier) verifySignature(ctx context.Context, subject string, subjectDesc ocispec.Descriptor, signature []byte, signatureMediaType string) (*notation.VerificationOutcome, error) {
-	opts := notation.VerifierVerifyOptions{
-		SignatureMediaType: signatureMediaType,
-		ArtifactReference:  subject,
-	}
-	return v.sigVerifier.Verify(ctx, subjectDesc, signature, opts)
+	return manifest.Layers[0], nil
 }

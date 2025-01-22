@@ -43,7 +43,7 @@ func (m *mockTrustStore) GetCertificates(ctx context.Context, storeType truststo
 }
 
 func TestNewVerifier(t *testing.T) {
-	opts := &NewVerifierOptions{
+	opts := &VerifierOptions{
 		Name: testVerifierName,
 		TrustPolicyDoc: &trustpolicy.Document{
 			Version: "1.0",

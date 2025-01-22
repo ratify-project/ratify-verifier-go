@@ -21,6 +21,7 @@ import (
 
 	"github.com/notaryproject/notation-go"
 	"github.com/notaryproject/notation-go/plugin"
+	notationRegistry "github.com/notaryproject/notation-go/registry"
 	"github.com/notaryproject/notation-go/verifier"
 	"github.com/notaryproject/notation-go/verifier/trustpolicy"
 	"github.com/notaryproject/notation-go/verifier/truststore"
@@ -29,13 +30,10 @@ import (
 	"oras.land/oras-go/v2/registry"
 )
 
-const (
-	notationVerifierType          = "notation"
-	notationSignatureArtifactType = "application/vnd.cncf.notary.signature"
-)
+const notationVerifierType = "notation"
 
-// NewVerifierOptions contains the options for creating a new Notation verifier.
-type NewVerifierOptions struct {
+// VerifierOptions contains the options for creating a new Notation verifier.
+type VerifierOptions struct {
 	// Name is the instance name of the verifier to be created. Required.
 	Name string
 
@@ -65,15 +63,15 @@ type Verifier struct {
 }
 
 // NewVerifier creates a new Notation verifier.
-func NewVerifier(opts *NewVerifierOptions) (*Verifier, error) {
-	verifier, err := verifier.New(opts.TrustPolicyDoc, opts.TrustStore, opts.PluginManager)
+func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
+	v, err := verifier.New(opts.TrustPolicyDoc, opts.TrustStore, opts.PluginManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notation verifier: %w", err)
 	}
 
 	return &Verifier{
 		name:     opts.Name,
-		verifier: verifier,
+		verifier: v,
 	}, nil
 }
 
@@ -89,7 +87,7 @@ func (v *Verifier) Type() string {
 
 // Verifiable returns true if the artifact is a Notation signature.
 func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
-	return artifact.ArtifactType == notationSignatureArtifactType && artifact.MediaType == ocispec.MediaTypeImageManifest
+	return artifact.ArtifactType == notationRegistry.ArtifactTypeNotation && artifact.MediaType == ocispec.MediaTypeImageManifest
 }
 
 // Verify verifies the Notation signature.

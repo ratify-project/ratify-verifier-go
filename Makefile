@@ -15,7 +15,7 @@
 all: test
 
 .PHONY: test
-test: check-line-endings ## run unit tests
+test: check-line-endings ## run unit tests in all modules
 	@for dir in $(shell find . -name "go.mod" -exec dirname {} \;); do \
 		echo "Running tests in $$dir"; \
 		( cd $$dir && go test -race -v -coverprofile=coverage.txt -covermode=atomic ./... ); \
@@ -28,7 +28,7 @@ clean:
 .PHONY: check-line-endings
 check-line-endings: ## check line endings
 	! find . -name "*.go" -type f -exec file "{}" ";" | grep CRLF
-	! find -name "*.sh" -type f -exec file "{}" ";" | grep CRLF
+	! find . -name "*.sh" -type f -exec file "{}" ";" | grep CRLF
 
 .PHONY: fix-line-endings
 fix-line-endings: ## fix line endings

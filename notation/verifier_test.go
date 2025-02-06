@@ -160,19 +160,11 @@ func TestVerify(t *testing.T) {
 		expectedError  bool
 	}{
 		{
-			name:     "subject parse failed",
+			name:     "failed to fetch manifest",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: "invalid",
-			},
-			expectedError: true,
-		},
-		{
-			name:     "failed to fetch image manifest",
-			verifier: &mockVerifier{},
-			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
-				Store:   &mockStore{},
+				Repository: testRepo,
+				Store:      &mockStore{},
 			},
 			expectedError: true,
 		},
@@ -180,7 +172,7 @@ func TestVerify(t *testing.T) {
 			name:     "no layers in the signature manifest",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
 					manifest: &ocispec.Manifest{},
 				},
@@ -191,7 +183,7 @@ func TestVerify(t *testing.T) {
 			name:     "failed to unmarshal signature manifest",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
 					manifestBytes: []byte("invalid"),
 				},
@@ -202,7 +194,7 @@ func TestVerify(t *testing.T) {
 			name:     "failed to fetch blob content",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
 					manifest: &ocispec.Manifest{
 						Layers: []ocispec.Descriptor{
@@ -219,7 +211,7 @@ func TestVerify(t *testing.T) {
 			name:     "failed to verify signature",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
 					manifest: &ocispec.Manifest{
 						Layers: []ocispec.Descriptor{
@@ -240,7 +232,7 @@ func TestVerify(t *testing.T) {
 				verifySucceeded: true,
 			},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
 					manifest: &ocispec.Manifest{
 						Layers: []ocispec.Descriptor{

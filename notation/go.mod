@@ -3,9 +3,10 @@ module github.com/ratify-project/ratify-verifier-go/notation
 go 1.22.0
 
 require (
+	github.com/notaryproject/notation-core-go v1.2.0
 	github.com/notaryproject/notation-go v1.3.0
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/ratify-project/ratify-go v0.0.0-20250121002110-2815af359901
+	github.com/ratify-project/ratify-go v0.0.0-20250206022400-b18f90180052
 	oras.land/oras-go/v2 v2.5.0
 )
 
@@ -16,7 +17,6 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.10 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/notaryproject/notation-core-go v1.2.0 // indirect
 	github.com/notaryproject/notation-plugin-framework-go v1.0.0 // indirect
 	github.com/notaryproject/tspclient-go v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect

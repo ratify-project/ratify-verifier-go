@@ -17,6 +17,7 @@ package notation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/notaryproject/notation-go"
@@ -97,12 +98,16 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 		return nil, fmt.Errorf("failed to parse subject reference: %w", err)
 	}
 
-	signatureDesc, err := v.getSignatureBlobDesc(ctx, opts.Store, subjectRef, opts.SubjectDescriptor)
+	signatureDesc, err := v.getSignatureBlobDesc(ctx, opts.Store, subjectRef, opts.ArtifactDescriptor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signature blob descriptor: %w", err)
 	}
 
-	signatureBlob, err := opts.Store.FetchBlobContent(ctx, subjectRef.Repository, signatureDesc)
+	repo := subjectRef.Repository
+	if subjectRef.Registry != "" {
+		repo = subjectRef.Registry + "/" + repo
+	}
+	signatureBlob, err := opts.Store.FetchBlob(ctx, repo, signatureDesc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch signature blob: %w", err)
 	}
@@ -129,10 +134,15 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	return result, nil
 }
 
-func (v *Verifier) getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) (ocispec.Descriptor, error) {
-	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
+func (v *Verifier) getSignatureBlobDesc(ctx context.Context, store ratify.Store, subjectRef registry.Reference, artifactDesc ocispec.Descriptor) (ocispec.Descriptor, error) {
+	manifestBytes, err := store.FetchManifest(ctx, subjectRef.Registry+"/"+subjectRef.Repository, artifactDesc)
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("failed to fetch image manifest for artifact: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("failed to fetch manifest for artifact: %w", err)
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("failed to unmarshal manifest: %w", err)
 	}
 
 	if len(manifest.Layers) != 1 {

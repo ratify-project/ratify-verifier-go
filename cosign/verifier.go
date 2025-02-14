@@ -151,6 +151,7 @@ func updateRepoSigVerifierKeys(repo string, opts *cosign.CheckOpts, keysMap map[
 	if !exists {
 		// Use the Fulcio root certificate for keyless verification
 		// TODO: support passing certChain and no CARoots
+		opts.SigVerifier = nil
 		roots, err := fulcio.GetRoots()
 		if err != nil || roots == nil {
 			return err

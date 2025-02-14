@@ -22,6 +22,7 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/ratify-project/ratify-go"
+	"github.com/sigstore/cosign/v2/cmd/cosign/cli/fulcio"
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 	"github.com/sigstore/cosign/v2/pkg/oci/static"
 	"github.com/sigstore/sigstore/pkg/signature"
@@ -148,7 +149,20 @@ func updateRepoSigVerifierKeys(repo string, opts *cosign.CheckOpts, keysMap map[
 	hashType := crypto.SHA256
 	key, exists := keysMap[repo]
 	if !exists {
-		return fmt.Errorf("public key for repo %s not found", repo)
+		// Use the Fulcio root certificate for keyless verification
+		// TODO: support passing certChain and no CARoots
+		roots, err := fulcio.GetRoots()
+		if err != nil || roots == nil {
+			return err
+		}
+		opts.RootCerts = roots
+		opts.IgnoreSCT = true
+
+		opts.IntermediateCerts, err = fulcio.GetIntermediates()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 	verifier, err := signature.LoadVerifier(key, hashType)
 	if err != nil {

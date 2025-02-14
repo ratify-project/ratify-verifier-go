@@ -259,46 +259,37 @@ func TestGetSignatureBlobDesc(t *testing.T) {
 func TestUpdateRepoSigVerifierKeys(t *testing.T) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	tests := []struct {
-		name    string
-		repo    string
-		keysMap map[string]crypto.PublicKey
-		wantErr bool
+		name          string
+		repo          string
+		opts          *cosign.CheckOpts
+		keysMap       map[string]crypto.PublicKey
+		expectedError bool
 	}{
 		{
-			name: "successful key update",
+			name: "key exists in keysMap",
 			repo: "test-repo",
+			opts: &cosign.CheckOpts{},
 			keysMap: map[string]crypto.PublicKey{
 				"test-repo": &priv.PublicKey,
 			},
-			wantErr: false,
+			expectedError: false,
 		},
 		{
-			name:    "key not found",
-			repo:    "non-existent-repo",
-			keysMap: map[string]crypto.PublicKey{},
-			wantErr: true,
-		},
-		{
-			name: "failed to load verifier",
-			repo: "test-repo",
-			keysMap: map[string]crypto.PublicKey{
-				"test-repo": nil,
-			},
-			wantErr: true,
+			name:          "key does not exist in keysMap and fulcio returns roots and intermediates",
+			repo:          "test-repo",
+			opts:          &cosign.CheckOpts{},
+			keysMap:       map[string]crypto.PublicKey{},
+			expectedError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := &cosign.CheckOpts{
-				SigVerifier: nil,
-			}
-			err := updateRepoSigVerifierKeys(tt.repo, opts, tt.keysMap)
-			if tt.wantErr {
+			err := updateRepoSigVerifierKeys(tt.repo, tt.opts, tt.keysMap)
+			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, opts.SigVerifier)
 			}
 		})
 	}

@@ -3,6 +3,7 @@ module github.com/ratify-project/ratify-verifier-go/cosign
 go 1.22.0
 
 require (
+	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/ratify-project/ratify-go v0.0.0-20250121002110-2815af359901
 	github.com/sigstore/cosign/v2 v2.2.4
@@ -123,7 +124,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nozzle/throttler v0.0.0-20180817012639-2ea982251481 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

@@ -18,12 +18,13 @@ package cosign
 import (
 	"context"
 	"crypto"
+	"encoding/json"
 	"fmt"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/ratify-project/ratify-go"
-	"github.com/sigstore/cosign/v2/cmd/cosign/cli/fulcio"
 	"github.com/sigstore/cosign/v2/pkg/cosign"
+	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
 	"github.com/sigstore/cosign/v2/pkg/oci/static"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"oras.land/oras-go/v2/registry"
@@ -91,8 +92,8 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subject reference: %w", err)
 	}
-
-	err = updateRepoSigVerifierKeys(opts.Subject, v.CheckOpts, v.keysMap)
+	// Use the Fulcio root certificate for keyless verification
+	err = updateCheckOpts(opts.Subject, v.CheckOpts, v.keysMap, &DefaultCertOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to update signature verifier keys: %w", err)
 	}
@@ -106,11 +107,15 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	}
 
 	for _, signatureDesc := range signatureLayers {
+		staticOpts, err := staticLayerOpts(signatureDesc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse Cosign signature  %w", err)
+		}
 		signatureBlob, err := opts.Store.FetchBlobContent(ctx, subjectRef.Repository, signatureDesc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch signature blob: %w", err)
 		}
-		sig, err := static.NewSignature(signatureBlob, signatureDesc.Annotations[static.SignatureAnnotationKey])
+		sig, err := static.NewSignature(signatureBlob, signatureDesc.Annotations[static.SignatureAnnotationKey], staticOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate the cosign signature: %w", err)
 		}
@@ -144,22 +149,25 @@ func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef r
 	return signatureLayers, nil
 }
 
-// updateRepoSigVerifierKeys updates the signature verifier keys for the given repository.
-func updateRepoSigVerifierKeys(repo string, opts *cosign.CheckOpts, keysMap map[string]crypto.PublicKey) error {
+// updateCheckOpts updates the signature verifierOpts by verifyOpts.
+func updateCheckOpts(repo string, opts *cosign.CheckOpts, keysMap map[string]crypto.PublicKey, certOpt CertOptions) error {
+	if opts.RekorClient == nil {
+		opts.IgnoreTlog = true
+	}
+
 	hashType := crypto.SHA256
 	key, exists := keysMap[repo]
 	if !exists {
-		// Use the Fulcio root certificate for keyless verification
 		// TODO: support passing certChain and no CARoots
 		opts.SigVerifier = nil
-		roots, err := fulcio.GetRoots()
+		roots, err := certOpt.GetRoots()
 		if err != nil || roots == nil {
 			return err
 		}
 		opts.RootCerts = roots
 		opts.IgnoreSCT = true
 
-		opts.IntermediateCerts, err = fulcio.GetIntermediates()
+		opts.IntermediateCerts, err = certOpt.GetIntermediates()
 		if err != nil {
 			return err
 		}
@@ -171,4 +179,30 @@ func updateRepoSigVerifierKeys(repo string, opts *cosign.CheckOpts, keysMap map[
 	}
 	opts.SigVerifier = verifier
 	return nil
+}
+
+// staticLayerOpts builds the cosign options for static layer signatures.
+//
+// Parameters:
+// - desc: The OCI descriptor of the signature layer.
+//
+// Returns:
+// - A slice of static.Option containing the options for the static layer signature.
+// - An error if there is an issue with unmarshalling the bundle or other processing.
+func staticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
+	options := []static.Option{
+		static.WithAnnotations(desc.Annotations),
+	}
+	if cert, chain := desc.Annotations[static.CertificateAnnotationKey], desc.Annotations[static.ChainAnnotationKey]; cert != "" && chain != "" {
+		options = append(options, static.WithCertChain([]byte(cert), []byte(chain)))
+	}
+	var rekorBundle bundle.RekorBundle = bundle.RekorBundle{}
+	if val, ok := desc.Annotations[static.BundleAnnotationKey]; ok {
+		if err := json.Unmarshal([]byte(val), &rekorBundle); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal rekor bundle: %w", err)
+		}
+		options = append(options, static.WithBundle(&rekorBundle))
+	}
+
+	return options, nil
 }

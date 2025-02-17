@@ -17,6 +17,7 @@ package notation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/notaryproject/notation-go"
@@ -27,7 +28,6 @@ import (
 	"github.com/notaryproject/notation-go/verifier/truststore"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/ratify-project/ratify-go"
-	"oras.land/oras-go/v2/registry"
 )
 
 const notationVerifierType = "notation"
@@ -92,17 +92,12 @@ func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 
 // Verify verifies the Notation signature.
 func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*ratify.VerificationResult, error) {
-	subjectRef, err := registry.ParseReference(opts.Subject)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse subject reference: %w", err)
-	}
-
-	signatureDesc, err := v.getSignatureBlobDesc(ctx, opts.Store, subjectRef, opts.SubjectDescriptor)
+	signatureDesc, err := v.getSignatureBlobDesc(ctx, opts.Store, opts.Repository, opts.ArtifactDescriptor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signature blob descriptor: %w", err)
 	}
 
-	signatureBlob, err := opts.Store.FetchBlobContent(ctx, subjectRef.Repository, signatureDesc)
+	signatureBlob, err := opts.Store.FetchBlob(ctx, opts.Repository, signatureDesc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch signature blob: %w", err)
 	}
@@ -112,7 +107,7 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	}
 	verifyOpts := notation.VerifierVerifyOptions{
 		SignatureMediaType: signatureDesc.MediaType,
-		ArtifactReference:  opts.Subject,
+		ArtifactReference:  opts.Repository + "@" + opts.SubjectDescriptor.Digest.String(),
 	}
 	outcome, err := v.verifier.Verify(ctx, opts.SubjectDescriptor, signatureBlob, verifyOpts)
 	if err != nil {
@@ -129,10 +124,15 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	return result, nil
 }
 
-func (v *Verifier) getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) (ocispec.Descriptor, error) {
-	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
+func (v *Verifier) getSignatureBlobDesc(ctx context.Context, store ratify.Store, repo string, artifactDesc ocispec.Descriptor) (ocispec.Descriptor, error) {
+	manifestBytes, err := store.FetchManifest(ctx, repo, artifactDesc)
 	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("failed to fetch image manifest for artifact: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("failed to fetch manifest for artifact: %w", err)
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("failed to unmarshal manifest: %w", err)
 	}
 
 	if len(manifest.Layers) != 1 {

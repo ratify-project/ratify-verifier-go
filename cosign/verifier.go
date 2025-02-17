@@ -67,7 +67,7 @@ type Verifier struct {
 // Parameters:
 // - opts: Options for creating the verifier, including the name and check options.
 func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
-	checkOpts, err := getCheckOpts(context.Background(), &opts.VerifyCommand)
+	checkOpts, err := NewCheckOpts(context.Background(), &opts.VerifyCommand)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update signature verifier keys: %w", err)
 	}
@@ -100,6 +100,8 @@ func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 
 // Verify verifies the cosign signature.
 func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*ratify.VerificationResult, error) {
+	v.MapSigVerifier(ctx, opts)
+
 	subjectRef, err := registry.ParseReference(opts.Subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subject reference: %w", err)
@@ -148,13 +150,21 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	return result, nil
 }
 
-// GetSigVerifier initializes and returns a signature verifier based on the provided VerifyCommand and CheckOpts.
+// MapSigVerifier maps and returns a signature verifier based on the provided VerifyCommand and CheckOpts.
 // It supports different types of verifiers including key references, security keys, and certificate references.
-func (v *Verifier) GetSigVerifier(opts *ratify.VerifyOptions) (err error) {
-	c, err := getVerifyCommandFromOpts(opts)
+func (v *Verifier) MapSigVerifier(ctx context.Context, opts *ratify.VerifyOptions) (err error) {
+	c, err := getVerifyCommandFromOpts(v, opts)
 	if err != nil {
 		return fmt.Errorf("failed to get verify command from options: %w", err)
 	}
+	// Ignore Signed Certificate Timestamp if the flag is set or a key is provided
+	if c.KeyRef == "" && !c.Sk && !c.IgnoreSCT {
+		v.CheckOpts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx)
+		if err != nil {
+			return fmt.Errorf("getting ctlog public keys: %w", err)
+		}
+	}
+
 	var pubKey signature.Verifier
 	switch {
 	case c.KeyRef != "":
@@ -239,8 +249,8 @@ func (v *Verifier) GetSigVerifier(opts *ratify.VerifyOptions) (err error) {
 	return nil
 }
 
-// getCheckOpts updates the signature verifierOpts by verifierOptions.
-func getCheckOpts(ctx context.Context, c *verify.VerifyCommand) (opts *cosign.CheckOpts, err error) {
+// NewCheckOpts updates the signature verifierOpts by verifierOptions.
+func NewCheckOpts(ctx context.Context, c *verify.VerifyCommand) (opts *cosign.CheckOpts, err error) {
 	// initialize the cosign check options
 	opts = &cosign.CheckOpts{}
 
@@ -277,15 +287,6 @@ func getCheckOpts(ctx context.Context, c *verify.VerifyCommand) (opts *cosign.Ch
 			return nil, fmt.Errorf("getting Rekor public keys: %w", err)
 		}
 	}
-
-	// Ignore Signed Certificate Timestamp if the flag is set or a key is provided
-	if shouldVerifySCT(c.IgnoreSCT, c.KeyRef, c.Sk) {
-		opts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting ctlog public keys: %w", err)
-		}
-	}
-
 	return opts, nil
 }
 
@@ -304,7 +305,8 @@ func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef r
 	return signatureLayers, nil
 }
 
-func getVerifyCommandFromOpts(opts *ratify.VerifyOptions) (*verify.VerifyCommand, error) {
+func getVerifyCommandFromOpts(v *Verifier, opts *ratify.VerifyOptions) (*verify.VerifyCommand, error) {
+	v.truststore.GetVerifyOpts(opts.Subject)
 	return nil, nil
 }
 
@@ -325,17 +327,4 @@ func staticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
 	}
 
 	return options, nil
-}
-
-func shouldVerifySCT(ignoreSCT bool, keyRef string, sk bool) bool {
-	if keyRef != "" {
-		return false
-	}
-	if sk {
-		return false
-	}
-	if ignoreSCT {
-		return false
-	}
-	return true
 }

@@ -51,7 +51,8 @@ type VerifierOptions struct {
 	Name string
 
 	// VerifyCommand is a stuct contains params that executes the verification process.
-	verify.VerifyCommand
+	// TODO: Update this field to a struct hold multi-VerfiyCommands
+	*verify.VerifyCommand
 }
 
 // Verifier is a ratify.Verifier implementation that verifies cosign
@@ -63,11 +64,8 @@ type Verifier struct {
 }
 
 // NewVerifier creates a new cosign verifier.
-//
-// Parameters:
-// - opts: Options for creating the verifier, including the name and check options.
 func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
-	checkOpts, err := NewCheckOpts(context.Background(), &opts.VerifyCommand)
+	checkOpts, err := NewCheckOpts(context.Background(), opts.VerifyCommand)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update signature verifier keys: %w", err)
 	}
@@ -80,6 +78,47 @@ func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
 		// Set the cosign check options from the provided options.
 		CheckOpts: checkOpts,
 	}, nil
+}
+
+// NewCheckOpts updates the signature verifierOpts by verifierOptions.
+func NewCheckOpts(ctx context.Context, c *verify.VerifyCommand) (opts *cosign.CheckOpts, err error) {
+	// initialize the cosign check options
+	opts = &cosign.CheckOpts{}
+
+	if c.CheckClaims {
+		opts.ClaimVerifier = cosign.SimpleClaimVerifier
+	}
+
+	// If we are using signed timestamps, we need to load the TSA certificates
+	if c.TSACertChainPath != "" || c.UseSignedTimestamps {
+		tsaCertificates, err := cosign.GetTSACerts(ctx, c.TSACertChainPath, cosign.GetTufTargets)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load TSA certificates: %w", err)
+		}
+		opts.TSACertificate = tsaCertificates.LeafCert
+		opts.TSARootCertificates = tsaCertificates.RootCert
+		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
+	}
+
+	if !c.IgnoreTlog {
+		if c.RekorURL == "" {
+			c.RekorURL = defaultRekorURL
+		}
+
+		rekorClient, err := rekor.NewClient(c.RekorURL)
+		if err != nil {
+			return nil, fmt.Errorf("creating Rekor client: %w", err)
+		}
+		opts.RekorClient = rekorClient
+
+		// This performs an online fetch of the Rekor public keys, but this is needed
+		// for verifying tlog entries (both online and offline).
+		opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting Rekor public keys: %w", err)
+		}
+	}
+	return opts, nil
 }
 
 // Name returns the name of the verifier.
@@ -153,7 +192,8 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 // MapSigVerifier maps and returns a signature verifier based on the provided VerifyCommand and CheckOpts.
 // It supports different types of verifiers including key references, security keys, and certificate references.
 func (v *Verifier) MapSigVerifier(ctx context.Context, opts *ratify.VerifyOptions) (err error) {
-	c, err := getVerifyCommandFromOpts(v, opts)
+	// TODO: update default values for the verifier options
+	c, err := v.truststore.GetVerifyOpts(opts.Subject)
 	if err != nil {
 		return fmt.Errorf("failed to get verify command from options: %w", err)
 	}
@@ -165,15 +205,15 @@ func (v *Verifier) MapSigVerifier(ctx context.Context, opts *ratify.VerifyOption
 		}
 	}
 
-	var pubKey signature.Verifier
+	var pubKey signature.Verifier = nil
 	switch {
 	case c.KeyRef != "":
-		if c.HashAlgorithm == 0 {
-			c.HashAlgorithm = crypto.SHA256
-		}
 		key, err := v.truststore.GetKey(c.KeyRef)
 		if err != nil {
 			return fmt.Errorf("getting key: %w", err)
+		}
+		if c.HashAlgorithm == 0 {
+			c.HashAlgorithm = crypto.SHA256
 		}
 		pubKey, err = signature.LoadVerifier(key, c.HashAlgorithm)
 		if err != nil {
@@ -249,47 +289,6 @@ func (v *Verifier) MapSigVerifier(ctx context.Context, opts *ratify.VerifyOption
 	return nil
 }
 
-// NewCheckOpts updates the signature verifierOpts by verifierOptions.
-func NewCheckOpts(ctx context.Context, c *verify.VerifyCommand) (opts *cosign.CheckOpts, err error) {
-	// initialize the cosign check options
-	opts = &cosign.CheckOpts{}
-
-	if c.CheckClaims {
-		opts.ClaimVerifier = cosign.SimpleClaimVerifier
-	}
-
-	// If we are using signed timestamps, we need to load the TSA certificates
-	if c.TSACertChainPath != "" || c.UseSignedTimestamps {
-		tsaCertificates, err := cosign.GetTSACerts(ctx, c.TSACertChainPath, cosign.GetTufTargets)
-		if err != nil {
-			return nil, fmt.Errorf("unable to load TSA certificates: %w", err)
-		}
-		opts.TSACertificate = tsaCertificates.LeafCert
-		opts.TSARootCertificates = tsaCertificates.RootCert
-		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
-	}
-
-	if !c.IgnoreTlog {
-		if c.RekorURL == "" {
-			c.RekorURL = defaultRekorURL
-		}
-
-		rekorClient, err := rekor.NewClient(c.RekorURL)
-		if err != nil {
-			return nil, fmt.Errorf("creating Rekor client: %w", err)
-		}
-		opts.RekorClient = rekorClient
-
-		// This performs an online fetch of the Rekor public keys, but this is needed
-		// for verifying tlog entries (both online and offline).
-		opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting Rekor public keys: %w", err)
-		}
-	}
-	return opts, nil
-}
-
 func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
 	if err != nil {
@@ -303,11 +302,6 @@ func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef r
 		}
 	}
 	return signatureLayers, nil
-}
-
-func getVerifyCommandFromOpts(v *Verifier, opts *ratify.VerifyOptions) (*verify.VerifyCommand, error) {
-	v.truststore.GetVerifyOpts(opts.Subject)
-	return nil, nil
 }
 
 // staticLayerOpts builds the cosign options for static layer signatures.

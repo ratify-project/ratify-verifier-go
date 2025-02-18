@@ -33,7 +33,6 @@ import (
 	rekor "github.com/sigstore/rekor/pkg/client"
 	"github.com/sigstore/sigstore/pkg/fulcioroots"
 	"github.com/sigstore/sigstore/pkg/signature"
-	"oras.land/oras-go/v2/registry"
 )
 
 const (
@@ -90,7 +89,7 @@ func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 
 // Verify verifies the cosign signature.
 func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*ratify.VerificationResult, error) {
-	vctx, err := v.verifyContextOptions.GetVerifyOpts(opts.Subject)
+	vctx, err := v.verifyContextOptions.GetVerifyOpts(opts.Repository + "@" + opts.SubjectDescriptor.Digest.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get verify context from options: %w", err)
 	}
@@ -256,29 +255,24 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 }
 
 func getgSigandSigDesc(ctx context.Context, opts *ratify.VerifyOptions) (oci.Signature, v1.Hash, error) {
-	subjectRef, err := registry.ParseReference(opts.Subject)
-	if err != nil {
-		return nil, v1.Hash{}, fmt.Errorf("failed to parse subject reference: %w", err)
-	}
-
-	signatureLayers, err := getSignatureBlobDesc(ctx, opts.Store, subjectRef, opts.SubjectDescriptor)
+	signatureDescriptors, err := getSignatureBlobDesc(ctx, opts.Store, opts.Repository, opts.ArtifactDescriptor)
 	if err != nil {
 		return nil, v1.Hash{}, fmt.Errorf("failed to get signature blob descriptor: %w", err)
 	}
 
 	// TODO: check with cosign library for the signature verification
-	numResults := len(signatureLayers)
+	numResults := len(signatureDescriptors)
 	if numResults == 0 {
 		return nil, v1.Hash{}, fmt.Errorf("unable to locate reference with artifactType %s", artifactTypeCosign)
 	}
 
-	signatureDesc := signatureLayers[numResults-1]
+	signatureDesc := signatureDescriptors[numResults-1]
 
 	staticOpts, err := getStaticLayerOpts(signatureDesc)
 	if err != nil {
 		return nil, v1.Hash{}, fmt.Errorf("failed to parse Cosign signature  %w", err)
 	}
-	signatureBlob, err := opts.Store.FetchBlobContent(ctx, subjectRef.Repository, signatureDesc)
+	signatureBlob, err := opts.Store.FetchBlob(ctx, opts.Repository, signatureDesc)
 	if err != nil {
 		return nil, v1.Hash{}, fmt.Errorf("failed to fetch signature blob: %w", err)
 	}
@@ -314,17 +308,21 @@ func getStaticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
 	return options, nil
 }
 
-func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
+func getSignatureBlobDesc(ctx context.Context, store ratify.Store, repo string, artifactDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+	manifestBytes, err := store.FetchManifest(ctx, repo, artifactDesc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch image manifest for artifact: %w", err)
+		return nil, fmt.Errorf("failed to fetch manifest for artifact: %w", err)
+	}
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal manifest: %w", err)
 	}
 
-	var signatureLayers []ocispec.Descriptor
+	var signatureDescriptors []ocispec.Descriptor
 	for _, layer := range manifest.Layers {
 		if layer.MediaType == artifactTypeCosign {
-			signatureLayers = append(signatureLayers, layer)
+			signatureDescriptors = append(signatureDescriptors, layer)
 		}
 	}
-	return signatureLayers, nil
+	return signatureDescriptors, nil
 }

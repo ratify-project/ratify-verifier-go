@@ -5,11 +5,10 @@ go 1.23.4
 require (
 	github.com/google/go-containerregistry v0.20.3
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/ratify-project/ratify-go v0.0.0-20250121002110-2815af359901
+	github.com/ratify-project/ratify-go v0.0.0-20250210030230-fce66985bcc3
 	github.com/sigstore/cosign/v2 v2.4.2
 	github.com/sigstore/rekor v1.3.9
 	github.com/sigstore/sigstore v1.8.12
-	oras.land/oras-go/v2 v2.5.0
 )
 
 require (
@@ -101,4 +100,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
+	oras.land/oras-go/v2 v2.5.0 // indirect
 )

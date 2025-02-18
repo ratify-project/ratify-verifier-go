@@ -19,22 +19,19 @@ import (
 	"context"
 	"crypto"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/ratify-project/ratify-go"
-	"github.com/sigstore/cosign/v2/cmd/cosign/cli/fulcio"
-	"github.com/sigstore/cosign/v2/cmd/cosign/cli/rekor"
-	verify "github.com/sigstore/cosign/v2/cmd/cosign/cli/verify"
+	"github.com/ratify-project/ratify-verifier-go/cosign/truststore"
+	"github.com/ratify-project/ratify-verifier-go/cosign/verifycontextoptions"
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
-	"github.com/sigstore/cosign/v2/pkg/cosign/pivkey"
-	"github.com/sigstore/cosign/v2/pkg/cosign/pkcs11key"
+	"github.com/sigstore/cosign/v2/pkg/oci"
 	"github.com/sigstore/cosign/v2/pkg/oci/static"
+	rekor "github.com/sigstore/rekor/pkg/client"
+	"github.com/sigstore/sigstore/pkg/fulcioroots"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"oras.land/oras-go/v2/registry"
 )
@@ -50,75 +47,29 @@ type VerifierOptions struct {
 	// Name is the instance name of the verifier to be created. Required.
 	Name string
 
-	// VerifyCommand is a stuct contains params that executes the verification process.
-	// TODO: Update this field to a struct hold multi-VerfiyCommands
-	*verify.VerifyCommand
+	// VerifyContextOptions represents the options for verifying the context.
+	// It includes various settings and parameters that influence the verification process.
+	VerifyContextOptions verifycontextoptions.VerifyContextOptions
+
+	// Truststore is the truststore that contains the keys and certificates used for verification.
+	Truststore truststore.TrustStore
 }
 
 // Verifier is a ratify.Verifier implementation that verifies cosign
 // signatures.
 type Verifier struct {
-	name       string
-	truststore TrustStore
-	*cosign.CheckOpts
+	name                 string
+	verifyContextOptions verifycontextoptions.VerifyContextOptions
+	truststore           truststore.TrustStore
 }
 
 // NewVerifier creates a new cosign verifier.
 func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
-	checkOpts, err := NewCheckOpts(context.Background(), opts.VerifyCommand)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update signature verifier keys: %w", err)
-	}
-
 	return &Verifier{
-		// Set the name of the verifier from the provided options.
-		name: opts.Name,
-		// Set the keys map from the provided options.
-		truststore: NewWithOpts(opts),
-		// Set the cosign check options from the provided options.
-		CheckOpts: checkOpts,
+		name:                 opts.Name,
+		verifyContextOptions: opts.VerifyContextOptions,
+		truststore:           opts.Truststore,
 	}, nil
-}
-
-// NewCheckOpts updates the signature verifierOpts by verifierOptions.
-func NewCheckOpts(ctx context.Context, c *verify.VerifyCommand) (opts *cosign.CheckOpts, err error) {
-	// initialize the cosign check options
-	opts = &cosign.CheckOpts{}
-
-	if c.CheckClaims {
-		opts.ClaimVerifier = cosign.SimpleClaimVerifier
-	}
-
-	// If we are using signed timestamps, we need to load the TSA certificates
-	if c.TSACertChainPath != "" || c.UseSignedTimestamps {
-		tsaCertificates, err := cosign.GetTSACerts(ctx, c.TSACertChainPath, cosign.GetTufTargets)
-		if err != nil {
-			return nil, fmt.Errorf("unable to load TSA certificates: %w", err)
-		}
-		opts.TSACertificate = tsaCertificates.LeafCert
-		opts.TSARootCertificates = tsaCertificates.RootCert
-		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
-	}
-
-	if !c.IgnoreTlog {
-		if c.RekorURL == "" {
-			c.RekorURL = defaultRekorURL
-		}
-
-		rekorClient, err := rekor.NewClient(c.RekorURL)
-		if err != nil {
-			return nil, fmt.Errorf("creating Rekor client: %w", err)
-		}
-		opts.RekorClient = rekorClient
-
-		// This performs an online fetch of the Rekor public keys, but this is needed
-		// for verifying tlog entries (both online and offline).
-		opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("getting Rekor public keys: %w", err)
-		}
-	}
-	return opts, nil
 }
 
 // Name returns the name of the verifier.
@@ -139,47 +90,25 @@ func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 
 // Verify verifies the cosign signature.
 func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*ratify.VerificationResult, error) {
-	v.MapSigVerifier(ctx, opts)
-
-	subjectRef, err := registry.ParseReference(opts.Subject)
+	vctx, err := v.verifyContextOptions.GetVerifyOpts(opts.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse subject reference: %w", err)
+		return nil, fmt.Errorf("failed to get verify context from options: %w", err)
 	}
-
-	signatureLayers, err := getSignatureBlobDesc(ctx, opts.Store, subjectRef, opts.SubjectDescriptor)
+	checkOpts, err := getCheckOpts(context.Background(), vctx, v.truststore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get signature blob descriptor: %w", err)
+		return nil, fmt.Errorf("failed to create cosign check options: %w", err)
 	}
 
-	numResults := len(signatureLayers)
-	if numResults == 0 {
-		return nil, fmt.Errorf("unable to locate reference with artifactType %s", artifactTypeCosign)
-	}
-
-	signatureDesc := signatureLayers[numResults-1]
-
-	staticOpts, err := staticLayerOpts(signatureDesc)
+	sig, signatureDescHash, err := getgSigandSigDesc(ctx, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse Cosign signature  %w", err)
-	}
-	signatureBlob, err := opts.Store.FetchBlobContent(ctx, subjectRef.Repository, signatureDesc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch signature blob: %w", err)
-	}
-	sig, err := static.NewSignature(signatureBlob, signatureDesc.Annotations[static.SignatureAnnotationKey], staticOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate the cosign signature: %w", err)
+		return nil, fmt.Errorf("failed to get signature and signature descriptor: %w", err)
 	}
 
-	// create the hash of the subject image descriptor (used as the hashed payload)
-	signatureDescHash := v1.Hash{
-		Algorithm: signatureDesc.Digest.Algorithm().String(),
-		Hex:       signatureDesc.Digest.Hex(),
-	}
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	_, err = cosign.VerifyImageSignature(ctx, sig, signatureDescHash, v.CheckOpts)
+	// TODO: update verify result
+	_, err = cosign.VerifyImageSignature(ctx, sig, signatureDescHash, checkOpts)
 	if err != nil {
 		result.Err = err
 		return result, nil
@@ -189,123 +118,185 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	return result, nil
 }
 
-// MapSigVerifier maps and returns a signature verifier based on the provided VerifyCommand and CheckOpts.
-// It supports different types of verifiers including key references, security keys, and certificate references.
-func (v *Verifier) MapSigVerifier(ctx context.Context, opts *ratify.VerifyOptions) (err error) {
-	// TODO: update default values for the verifier options
-	c, err := v.truststore.GetVerifyOpts(opts.Subject)
-	if err != nil {
-		return fmt.Errorf("failed to get verify command from options: %w", err)
+// getCheckOpts updates the signature verifierOpts by verifierOptions.
+// TODO: make sure this function is go-routine safe.
+func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore) (opts *cosign.CheckOpts, err error) {
+	// initialize the cosign check options
+	opts = &cosign.CheckOpts{}
+
+	if vctx.CheckClaims {
+		opts.ClaimVerifier = cosign.SimpleClaimVerifier
 	}
-	// Ignore Signed Certificate Timestamp if the flag is set or a key is provided
-	if c.KeyRef == "" && !c.Sk && !c.IgnoreSCT {
-		v.CheckOpts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx)
+
+	// If we are using signed timestamps, we need to load the TSA certificates
+	if vctx.TSACertChainPath != "" || vctx.UseSignedTimestamps {
+		tsaCertificates, err := cosign.GetTSACerts(ctx, vctx.TSACertChainPath, cosign.GetTufTargets)
 		if err != nil {
-			return fmt.Errorf("getting ctlog public keys: %w", err)
+			return nil, err
+		}
+		opts.TSACertificate = tsaCertificates.LeafCert
+		opts.TSARootCertificates = tsaCertificates.RootCert
+		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
+	}
+
+	if !vctx.IgnoreTlog {
+		if vctx.RekorURL == "" {
+			vctx.RekorURL = defaultRekorURL
+		}
+
+		rekorClient, err := rekor.GetRekorClient(vctx.RekorURL)
+		if err != nil {
+			return nil, err
+		}
+		opts.RekorClient = rekorClient
+
+		// This performs an online fetch of the Rekor public keys, but this is needed
+		// for verifying tlog entries (both online and offline).
+		opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx)
+		if err != nil {
+			return nil, err
 		}
 	}
 
+	// Ignore Signed Certificate Timestamp if the flag is set or a key is provided
+	if vctx.KeyRef == "" && !vctx.Sk && !vctx.IgnoreSCT {
+		opts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// TODO: update the os operation include by the cosign library
 	var pubKey signature.Verifier = nil
 	switch {
-	case c.KeyRef != "":
-		key, err := v.truststore.GetKey(c.KeyRef)
+	case vctx.KeyRef != "":
+		key, err := s.GetKey(vctx.KeyRef)
 		if err != nil {
-			return fmt.Errorf("getting key: %w", err)
+			return nil, err
 		}
-		if c.HashAlgorithm == 0 {
-			c.HashAlgorithm = crypto.SHA256
+		if vctx.HashAlgorithm == 0 {
+			vctx.HashAlgorithm = crypto.SHA256
 		}
-		pubKey, err = signature.LoadVerifier(key, c.HashAlgorithm)
+		pubKey, err = signature.LoadVerifier(key, vctx.HashAlgorithm)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		pkcs11Key, ok := pubKey.(*pkcs11key.Key)
-		if ok {
-			defer pkcs11Key.Close()
-		}
-	case c.Sk:
-		sk, err := pivkey.GetKeyWithSlot(c.Slot)
-		defer sk.Close()
+		// pkcs11Key, ok := pubKey.(*pkcs11key.Key)
+		// if ok {
+		// 	defer pkcs11Key.Close()
+		// }
+	case vctx.Sk:
+		// TODO: support secure key
+		// sk, err := pivkey.GetKeyWithSlot(vctx.Slot)
+		// defer sk.Close()
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// pubKey, err = sk.Verifier()
+		// if err != nil {
+		// 	return nil, err
+		// }
+	case vctx.CertRef != "":
+		cert, err := s.GetCert(vctx.CertRef)
 		if err != nil {
-			return fmt.Errorf("opening piv token: %w", err)
-		}
-		pubKey, err = sk.Verifier()
-		if err != nil {
-			return fmt.Errorf("initializing piv token verifier: %w", err)
-		}
-	case c.CertRef != "":
-		cert, err := v.truststore.GetCert(c.CertRef)
-		if err != nil {
-			return fmt.Errorf("getting certificate: %w", err)
+			return nil, err
 		}
 		switch {
-		case c.CertChain == "" && v.CheckOpts.RootCerts == nil:
+		case vctx.CertChain == "" && opts.RootCerts == nil:
 			// If no certChain and no CARoots are passed, the Fulcio root certificate will be used
-			v.CheckOpts.RootCerts, err = fulcio.GetRoots()
+			opts.RootCerts, err = fulcioroots.Get()
 			if err != nil {
-				return fmt.Errorf("getting Fulcio roots: %w", err)
+				return nil, err
 			}
-			v.CheckOpts.IntermediateCerts, err = fulcio.GetIntermediates()
+			opts.IntermediateCerts, err = fulcioroots.GetIntermediates()
 			if err != nil {
-				return fmt.Errorf("getting Fulcio intermediates: %w", err)
+				return nil, err
 			}
-			pubKey, err = cosign.ValidateAndUnpackCert(cert, v.CheckOpts)
+			pubKey, err = cosign.ValidateAndUnpackCert(cert, opts)
 			if err != nil {
-				return err
+				return nil, err
 			}
-		case c.CertChain != "":
+		case vctx.CertChain != "":
 			// Verify certificate with chain
-			chain, err := v.truststore.GetCertChain(c.CertChain)
+			chain, err := s.GetCertChain(vctx.CertChain)
 			if err != nil {
-				return fmt.Errorf("getting certificate chain: %w", err)
+				return nil, err
 			}
-			pubKey, err = cosign.ValidateAndUnpackCertWithChain(cert, chain, v.CheckOpts)
+			pubKey, err = cosign.ValidateAndUnpackCertWithChain(cert, chain, opts)
 			if err != nil {
-				return err
+				return nil, err
 			}
-		case v.CheckOpts.RootCerts != nil:
+		case opts.RootCerts != nil:
 			// Verify certificate with root (and if given, intermediate) certificate
-			pubKey, err = cosign.ValidateAndUnpackCert(cert, v.CheckOpts)
+			pubKey, err = cosign.ValidateAndUnpackCert(cert, opts)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		default:
-			return errors.New("no certificate chain provided to verify certificate")
+			return nil, err
 		}
 
-		if c.SCTRef != "" {
-			sct, err := os.ReadFile(filepath.Clean(c.SCTRef))
-			if err != nil {
-				return fmt.Errorf("reading sct from file: %w", err)
-			}
-			v.CheckOpts.SCT = sct
-		}
+		// TODO: fix tsa support
+
+		// if vctx.SCTRef != "" {
+		// 	sct, err := os.ReadFile(filepath.Clean(vctx.SCTRef))
+		// 	if err != nil {
+		// 		return nil, err
+		// 	}
+		// 	opts.SCT = sct
+		// }
 
 	default:
 		// Do nothing. Neither keyRef, c.Sk, nor certRef were set - can happen for example when using Fulcio and TSA.
 		// For an example see the TestAttachWithRFC3161Timestamp test in test/e2e_test.go.
 	}
-	v.CheckOpts.SigVerifier = pubKey
-	return nil
+	opts.SigVerifier = pubKey
+
+	return opts, nil
 }
 
-func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
+func getgSigandSigDesc(ctx context.Context, opts *ratify.VerifyOptions) (oci.Signature, v1.Hash, error) {
+	subjectRef, err := registry.ParseReference(opts.Subject)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch image manifest for artifact: %w", err)
+		return nil, v1.Hash{}, fmt.Errorf("failed to parse subject reference: %w", err)
 	}
 
-	var signatureLayers []ocispec.Descriptor
-	for _, layer := range manifest.Layers {
-		if layer.MediaType == artifactTypeCosign {
-			signatureLayers = append(signatureLayers, layer)
-		}
+	signatureLayers, err := getSignatureBlobDesc(ctx, opts.Store, subjectRef, opts.SubjectDescriptor)
+	if err != nil {
+		return nil, v1.Hash{}, fmt.Errorf("failed to get signature blob descriptor: %w", err)
 	}
-	return signatureLayers, nil
+
+	// TODO: check with cosign library for the signature verification
+	numResults := len(signatureLayers)
+	if numResults == 0 {
+		return nil, v1.Hash{}, fmt.Errorf("unable to locate reference with artifactType %s", artifactTypeCosign)
+	}
+
+	signatureDesc := signatureLayers[numResults-1]
+
+	staticOpts, err := getStaticLayerOpts(signatureDesc)
+	if err != nil {
+		return nil, v1.Hash{}, fmt.Errorf("failed to parse Cosign signature  %w", err)
+	}
+	signatureBlob, err := opts.Store.FetchBlobContent(ctx, subjectRef.Repository, signatureDesc)
+	if err != nil {
+		return nil, v1.Hash{}, fmt.Errorf("failed to fetch signature blob: %w", err)
+	}
+	sig, err := static.NewSignature(signatureBlob, signatureDesc.Annotations[static.SignatureAnnotationKey], staticOpts...)
+	if err != nil {
+		return nil, v1.Hash{}, fmt.Errorf("failed to validate the cosign signature: %w", err)
+	}
+
+	// create the hash of the subject image descriptor (used as the hashed payload)
+	signatureDescHash := v1.Hash{
+		Algorithm: signatureDesc.Digest.Algorithm().String(),
+		Hex:       signatureDesc.Digest.Hex(),
+	}
+	return sig, signatureDescHash, nil
 }
 
-// staticLayerOpts builds the cosign options for static layer signatures.
-func staticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
+// getStaticLayerOpts builds the cosign options for static layer signatures.
+func getStaticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
 	options := []static.Option{
 		static.WithAnnotations(desc.Annotations),
 	}
@@ -321,4 +312,19 @@ func staticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
 	}
 
 	return options, nil
+}
+
+func getSignatureBlobDesc(ctx context.Context, store ratify.Store, artifactRef registry.Reference, artifactDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+	manifest, err := store.FetchImageManifest(ctx, artifactRef.Registry+"/"+artifactRef.Repository, artifactDesc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch image manifest for artifact: %w", err)
+	}
+
+	var signatureLayers []ocispec.Descriptor
+	for _, layer := range manifest.Layers {
+		if layer.MediaType == artifactTypeCosign {
+			signatureLayers = append(signatureLayers, layer)
+		}
+	}
+	return signatureLayers, nil
 }

@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -52,7 +53,8 @@ func (m *mockTrustStore) GetCertificates(_ context.Context, _ truststore.Type, _
 
 // mockStore is a mock implementation of ratify.Store.
 type mockStore struct {
-	imageManifest *ocispec.Manifest
+	manifest      *ocispec.Manifest
+	manifestBytes []byte
 	signatureBlob []byte
 }
 
@@ -64,18 +66,21 @@ func (m *mockStore) ListReferrers(_ context.Context, _ string, _ []string, _ fun
 	return nil
 }
 
-func (m *mockStore) FetchBlobContent(_ context.Context, _ string, _ ocispec.Descriptor) ([]byte, error) {
+func (m *mockStore) FetchBlob(_ context.Context, _ string, _ ocispec.Descriptor) ([]byte, error) {
 	if m.signatureBlob == nil {
 		return nil, errors.New("signature blob not initialized")
 	}
 	return m.signatureBlob, nil
 }
 
-func (m *mockStore) FetchImageManifest(_ context.Context, _ string, _ ocispec.Descriptor) (*ocispec.Manifest, error) {
-	if m.imageManifest == nil {
+func (m *mockStore) FetchManifest(_ context.Context, _ string, _ ocispec.Descriptor) ([]byte, error) {
+	if m.manifest == nil && m.manifestBytes == nil {
 		return nil, errors.New("image manifest not initialized")
 	}
-	return m.imageManifest, nil
+	if m.manifestBytes != nil {
+		return m.manifestBytes, nil
+	}
+	return json.Marshal(m.manifest)
 }
 
 func (m *mockStore) Resolve(_ context.Context, _ string) (ocispec.Descriptor, error) {
@@ -155,19 +160,11 @@ func TestVerify(t *testing.T) {
 		expectedError  bool
 	}{
 		{
-			name:     "subject parse failed",
+			name:     "failed to fetch manifest",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: "invalid",
-			},
-			expectedError: true,
-		},
-		{
-			name:     "failed to fetch image manifest",
-			verifier: &mockVerifier{},
-			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
-				Store:   &mockStore{},
+				Repository: testRepo,
+				Store:      &mockStore{},
 			},
 			expectedError: true,
 		},
@@ -175,9 +172,20 @@ func TestVerify(t *testing.T) {
 			name:     "no layers in the signature manifest",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
-					imageManifest: &ocispec.Manifest{},
+					manifest: &ocispec.Manifest{},
+				},
+			},
+			expectedError: true,
+		},
+		{
+			name:     "failed to unmarshal signature manifest",
+			verifier: &mockVerifier{},
+			opts: &ratify.VerifyOptions{
+				Repository: testRepo,
+				Store: &mockStore{
+					manifestBytes: []byte("invalid"),
 				},
 			},
 			expectedError: true,
@@ -186,9 +194,9 @@ func TestVerify(t *testing.T) {
 			name:     "failed to fetch blob content",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
-					imageManifest: &ocispec.Manifest{
+					manifest: &ocispec.Manifest{
 						Layers: []ocispec.Descriptor{
 							{
 								Digest: testDigest2,
@@ -203,9 +211,9 @@ func TestVerify(t *testing.T) {
 			name:     "failed to verify signature",
 			verifier: &mockVerifier{},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
-					imageManifest: &ocispec.Manifest{
+					manifest: &ocispec.Manifest{
 						Layers: []ocispec.Descriptor{
 							{
 								Digest: testDigest2,
@@ -224,9 +232,9 @@ func TestVerify(t *testing.T) {
 				verifySucceeded: true,
 			},
 			opts: &ratify.VerifyOptions{
-				Subject: testSubject,
+				Repository: testRepo,
 				Store: &mockStore{
-					imageManifest: &ocispec.Manifest{
+					manifest: &ocispec.Manifest{
 						Layers: []ocispec.Descriptor{
 							{
 								Digest: testDigest2,

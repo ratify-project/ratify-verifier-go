@@ -128,6 +128,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 
 	// If we are using signed timestamps, we need to load the TSA certificates
 	if vctx.TSACertChainPath != "" || vctx.UseSignedTimestamps {
+		// TODO: update cosign get TSA certs
 		tsaCertificates, err := cosign.GetTSACerts(ctx, vctx.TSACertChainPath, cosign.GetTufTargets)
 		if err != nil {
 			return nil, err
@@ -234,13 +235,14 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 			return nil, err
 		}
 
-		// TODO: fix tsa support
+		// TODO: fix SCT support
 
 		// if vctx.SCTRef != "" {
 		// 	sct, err := os.ReadFile(filepath.Clean(vctx.SCTRef))
 		// 	if err != nil {
 		// 		return nil, err
 		// 	}
+		// 	opts.IgnoreSCT = vctx.IgnoreSCT
 		// 	opts.SCT = sct
 		// }
 
@@ -249,6 +251,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		// For an example see the TestAttachWithRFC3161Timestamp test in test/e2e_test.go.
 	}
 	opts.SigVerifier = pubKey
+	opts.MaxWorkers = vctx.MaxWorkers
 
 	return opts, nil
 }

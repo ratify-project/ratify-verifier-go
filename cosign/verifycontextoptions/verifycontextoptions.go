@@ -20,34 +20,47 @@ import (
 	"fmt"
 )
 
+// VerifyContext holds the options for verifying a context.
 type VerifyContext struct {
+	// CheckClaims indicates whether to check claims.
 	CheckClaims bool
-	RekorURL    string
-	IgnoreTlog  bool
+	// RekorURL is the URL of the Rekor transparency log.
+	RekorURL string
+	// IgnoreTlog indicates whether to ignore the transparency log.
+	IgnoreTlog bool
 
+	// HashAlgorithm is the hash algorithm to use.
 	HashAlgorithm crypto.Hash
-	KeyRef        string
-	Sk            bool
-	Slot          string
-	SignatureRef  string
+	// KeyRef is the reference to the key.
+	KeyRef string
+	// Sk indicates whether to use a security key.
+	Sk bool
+	// Slot is the slot to use for the security key.
+	Slot string
+	// SignatureRef is the reference to the signature.
+	SignatureRef string
 
-	CertRef              string
-	CertIdentity         string
-	CertIdentityRegexp   string
-	CertOidcIssuer       string
-	CertOidcIssuerRegexp string
-
+	// CertRef is the reference to the certificate.
+	CertRef string
+	// CAIntermediates is the path to the CA intermediates.
 	CAIntermediates string
-	CARoots         string
-	CertChain       string
+	// CARoots is the path to the CA roots.
+	CARoots string
+	// CertChain is the certificate chain.
+	CertChain string
 
+	// IgnoreSCT indicates whether to ignore the Signed Certificate Timestamp.
 	IgnoreSCT bool
-	SCTRef    string
+	// SCTRef is the reference to the Signed Certificate Timestamp.
+	SCTRef string
 
+	// UseSignedTimestamps indicates whether to use signed timestamps.
 	UseSignedTimestamps bool
-	TSACertChainPath    string
+	// TSACertChainPath is the path to the TSA certificate chain.
+	TSACertChainPath string
 
-	// Max number of workers to use for parallel verification and the default value is 10
+	// MaxWorkers is the maximum number of workers to use for parallel verification.
+	// The default value is 10.
 	MaxWorkers int
 }
 

@@ -21,24 +21,38 @@ import (
 )
 
 type VerifyContext struct {
-	HashAlgorithm       crypto.Hash
-	KeyRef              string
-	Sk                  bool
-	Slot                string
-	CertRef             string
-	CertChain           string
-	SCTRef              string
-	IgnoreSCT           bool
-	CheckClaims         bool
-	TSACertChainPath    string
+	CheckClaims bool
+	RekorURL    string
+	IgnoreTlog  bool
+
+	HashAlgorithm crypto.Hash
+	KeyRef        string
+	Sk            bool
+	Slot          string
+	SignatureRef  string
+
+	CertRef              string
+	CertIdentity         string
+	CertIdentityRegexp   string
+	CertOidcIssuer       string
+	CertOidcIssuerRegexp string
+
+	CAIntermediates string
+	CARoots         string
+	CertChain       string
+
+	IgnoreSCT bool
+	SCTRef    string
+
 	UseSignedTimestamps bool
-	IgnoreTlog          bool
-	RekorURL            string
+	TSACertChainPath    string
+
+	// Max number of workers to use for parallel verification and the default value is 10
+	MaxWorkers int
 }
 
 // VerifyContextOptions defines an interface for retrieving verification options
 // for a given subject reference.
-// TODO: this interface can be update referring to the cosign trustMaterial
 type VerifyContextOptions interface {
 	// GetVerifyOpts retrieves the verification options for a given subject reference.
 	GetVerifyOpts(subjectRef string) (*VerifyContext, error)

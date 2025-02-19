@@ -118,7 +118,6 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 }
 
 // getCheckOpts updates the signature verifierOpts by verifierOptions.
-// TODO: make sure this function is go-routine safe.
 func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore) (opts *cosign.CheckOpts, err error) {
 	// initialize the cosign check options
 	opts = &cosign.CheckOpts{}
@@ -260,7 +259,11 @@ func getgSigandSigDesc(ctx context.Context, opts *ratify.VerifyOptions) (oci.Sig
 		return nil, v1.Hash{}, fmt.Errorf("failed to get signature blob descriptor: %w", err)
 	}
 
-	// TODO: check with cosign library for the signature verification
+	// TODO: check with cosign library for the signature verification update
+	// For now this verifier will only verify the latest signature instead of one of all signatures
+	//
+	// Reference: https://github.com/sigstore/cosign/blob/main/pkg/cosign/verify.go#L722
+	// Reference: https://github.com/sigstore/cosign/blob/main/pkg/cosign/verify.go#L1478
 	numResults := len(signatureDescriptors)
 	if numResults == 0 {
 		return nil, v1.Hash{}, fmt.Errorf("unable to locate reference with artifactType %s", artifactTypeCosign)

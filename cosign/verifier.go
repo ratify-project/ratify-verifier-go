@@ -93,7 +93,7 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	if err != nil {
 		return nil, fmt.Errorf("failed to get verify context from options: %w", err)
 	}
-	checkOpts, err := getCheckOpts(context.Background(), vctx, v.truststore)
+	checkOpts, err := getCheckOpts(ctx, vctx, v.truststore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cosign check options: %w", err)
 	}
@@ -139,11 +139,12 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 	}
 
 	if !vctx.IgnoreTlog {
-		if vctx.RekorURL == "" {
-			vctx.RekorURL = defaultRekorURL
+		rekorURL := defaultRekorURL
+		if vctx.RekorURL != "" {
+			rekorURL = vctx.RekorURL
 		}
 
-		rekorClient, err := rekor.GetRekorClient(vctx.RekorURL)
+		rekorClient, err := rekor.GetRekorClient(rekorURL)
 		if err != nil {
 			return nil, err
 		}
@@ -169,14 +170,15 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 	var pubKey signature.Verifier = nil
 	switch {
 	case vctx.KeyRef != "":
-		key, err := s.GetKey(vctx.KeyRef)
+		key, err := s.GetKey(ctx, vctx.KeyRef)
 		if err != nil {
 			return nil, err
 		}
-		if vctx.HashAlgorithm == 0 {
-			vctx.HashAlgorithm = crypto.SHA256
+		hashAlgorithm := crypto.SHA256
+		if vctx.HashAlgorithm != 0 {
+			hashAlgorithm = vctx.HashAlgorithm
 		}
-		pubKey, err = signature.LoadVerifier(key, vctx.HashAlgorithm)
+		pubKey, err = signature.LoadVerifier(key, hashAlgorithm)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +198,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		// 	return nil, err
 		// }
 	case vctx.CertRef != "":
-		cert, err := s.GetCert(vctx.CertRef)
+		cert, err := s.GetCertificate(ctx, vctx.CertRef)
 		if err != nil {
 			return nil, err
 		}
@@ -217,7 +219,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 			}
 		case vctx.CertChain != "":
 			// Verify certificate with chain
-			chain, err := s.GetCertChain(vctx.CertChain)
+			chain, err := s.GetCertChain(ctx, vctx.CertChain)
 			if err != nil {
 				return nil, err
 			}

@@ -75,7 +75,7 @@ type verifyContextOptions struct {
 	optsMap map[string]*VerifyContext
 }
 
-func New() VerifyContextOptions {
+func NewVerifyContextOptions() VerifyContextOptions {
 	return &verifyContextOptions{
 		optsMap: make(map[string]*VerifyContext),
 	}

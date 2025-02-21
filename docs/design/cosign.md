@@ -1,72 +1,42 @@
 # Cosign Verifer Support 2025
 
 `ratify-verifier-go` cosign verifier is designed to support keyed verification and keyless verification:
+
 - using `store` API to get the artifacts
 - using `truststore` to store keys, certs and certchains
-- using `trustpolicy` to define desired verification scenarios
-- using `verifycontextoptions` to store verify context other than `truststore` and `trustpolicy`
+- using `verifycontextoptions` to store verify context other than `truststore`
 
+## Keyed Data Flow
 
-## Support Key Configuration
-### Data Flow
-User runs "cosign verify"
-       │
-       ▼
-Retrieve Image Digest from Registry
-       │
-       ▼
-Find Signature Object (<image-digest>.sig)
-       │
-       ▼
-Extract Signature and Signed Payload
-       │
-       ▼
-Verify Signature with Public Key
-       │
-       ▼
-Compare Signed Digest with Image Digest
-       │
-       ▼
-Output Verification Result
+1. Call "verify" with `ratify.VerifyOptions`
+2. Retrieve Image Digest from Registry using `ratify.Store`
+3. Find Signature Object (image-digest.sig)
+4. Extract Signature and Signed Payload
+5. Get Verify Context from `verifycontextoptions`
+6. Verify Signature with Public Key from `verifier.truststore`
+7. Compare Signed Digest with Image Digest
+8. Output Verification Result
 
+## Keyless Data Flow
 
-## Support Keyless Configuration
-### Data Flow
-User runs "cosign verify"
-       │
-       ▼
-Retrieve Image Digest from Registry
-       │
-       ▼
-Find Signature Object (<image-digest>.sig)
-       │
-       ▼
-Extract Signature & Signing Certificate
-       │
-       ▼
-Verify Certificate (Fulcio CA)
-       │
-       ▼
-Lookup Signature in Rekor Transparency Log
-       │
-       ▼
-Compare Signed Digest with Image Digest
-       │
-       ▼
-Validate OIDC Identity & Policy Check
-       │
-       ▼
-Output Verification Result
-
-
-### Cert Extension
+1. Call "verify" with `ratify.VerifyOptions`
+2. Retrieve Image Digest from Registry
+3. Find Signature Object (image-digest.sig)
+4. Extract Signature & Signing Certificate
+5. Verify Certificate (Fulcio CA)
+6. Lookup Signature in Rekor Transparency Log
+7. Compare Signed Digest with Image Digest
+8. Validate OIDC Identity & Policy Check
+9. Output Verification Result
 
 ## Implement Details
+
+### Initiate Verifier
+
+(Ratify) Verifier is initialized with `verifierOptions`, including `Name`, `VerifierContextOptions` and `TrustStore`
 
 ### VerifyContext
 
 ### TrustStore
-
-### TrustPolicy
 
 ## Future Considerations

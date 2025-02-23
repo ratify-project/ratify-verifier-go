@@ -127,9 +127,9 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 	}
 
 	// If we are using signed timestamps, we need to load the TSA certificates
-	if vctx.TSACertChainPath != "" || vctx.UseSignedTimestamps {
+	if vctx.CommonVerifyOptions.TSACertChainPath != "" || vctx.CommonVerifyOptions.UseSignedTimestamps {
 		// TODO: update cosign get TSA certs
-		tsaCertificates, err := cosign.GetTSACerts(ctx, vctx.TSACertChainPath, cosign.GetTufTargets)
+		tsaCertificates, err := cosign.GetTSACerts(ctx, vctx.CommonVerifyOptions.TSACertChainPath, cosign.GetTufTargets)
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +138,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
 	}
 
-	if !vctx.IgnoreTlog {
+	if !vctx.CommonVerifyOptions.IgnoreTlog {
 		rekorURL := defaultRekorURL
 		if vctx.RekorURL != "" {
 			rekorURL = vctx.RekorURL
@@ -159,7 +159,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 	}
 
 	// Ignore Signed Certificate Timestamp if the flag is set or a key is provided
-	if vctx.KeyRef == "" && !vctx.Sk && !vctx.IgnoreSCT {
+	if vctx.KeyRef == "" && !vctx.SecurityKeyOptions.Sk && !vctx.IgnoreSCT {
 		opts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx)
 		if err != nil {
 			return nil, err
@@ -186,9 +186,8 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		// if ok {
 		// 	defer pkcs11Key.Close()
 		// }
-	case vctx.Sk:
-		// TODO: support secure key
-		// sk, err := pivkey.GetKeyWithSlot(vctx.Slot)
+	case vctx.SecurityKeyOptions.Sk:
+		// sk, err := pivkey.GetKeyWithSlot(vctx.SecurityKeyOptions.Slot)
 		// defer sk.Close()
 		// if err != nil {
 		// 	return nil, err
@@ -197,13 +196,13 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		// if err != nil {
 		// 	return nil, err
 		// }
-	case vctx.CertRef != "":
-		cert, err := s.GetCertificate(ctx, vctx.CertRef)
+	case vctx.CertVerifyOptions.Cert != "":
+		cert, err := s.GetCertificate(ctx, vctx.CertVerifyOptions.Cert)
 		if err != nil {
 			return nil, err
 		}
 		switch {
-		case vctx.CertChain == "" && opts.RootCerts == nil:
+		case vctx.CertVerifyOptions.CertChain == "" && opts.RootCerts == nil:
 			// If no certChain and no CARoots are passed, the Fulcio root certificate will be used
 			opts.RootCerts, err = fulcioroots.Get()
 			if err != nil {
@@ -217,9 +216,9 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 			if err != nil {
 				return nil, err
 			}
-		case vctx.CertChain != "":
+		case vctx.CertVerifyOptions.CertChain != "":
 			// Verify certificate with chain
-			chain, err := s.GetCertChain(ctx, vctx.CertChain)
+			chain, err := s.GetCertChain(ctx, vctx.CertVerifyOptions.CertChain)
 			if err != nil {
 				return nil, err
 			}
@@ -238,7 +237,6 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		}
 
 		// TODO: fix SCT support
-
 		// if vctx.SCTRef != "" {
 		// 	sct, err := os.ReadFile(filepath.Clean(vctx.SCTRef))
 		// 	if err != nil {
@@ -253,7 +251,7 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		// For an example see the TestAttachWithRFC3161Timestamp test in test/e2e_test.go.
 	}
 	opts.SigVerifier = pubKey
-	opts.MaxWorkers = vctx.MaxWorkers
+	opts.MaxWorkers = vctx.CommonVerifyOptions.MaxWorkers
 
 	return opts, nil
 }

@@ -18,6 +18,8 @@ package verifycontextoptions
 import (
 	"crypto"
 	"fmt"
+
+	"github.com/sigstore/cosign/v2/pkg/cosign"
 )
 
 // VerifyContext holds the options for verifying a context.
@@ -26,42 +28,63 @@ type VerifyContext struct {
 	CheckClaims bool
 	// RekorURL is the URL of the Rekor transparency log.
 	RekorURL string
-	// IgnoreTlog indicates whether to ignore the transparency log.
-	IgnoreTlog bool
 
-	// HashAlgorithm is the hash algorithm to use.
-	HashAlgorithm crypto.Hash
-	// KeyRef is the reference to the key.
-	KeyRef string
-	// Sk indicates whether to use a security key.
-	Sk bool
-	// Slot is the slot to use for the security key.
-	Slot string
-	// SignatureRef is the reference to the signature.
-	SignatureRef string
-
-	// CertRef is the reference to the certificate.
-	CertRef string
-	// CAIntermediates is the path to the CA intermediates.
-	CAIntermediates string
-	// CARoots is the path to the CA roots.
-	CARoots string
-	// CertChain is the certificate chain.
-	CertChain string
+	// CommonVerifyOptions represents the common options used for verification
+	// in the cosign verifier.
+	CommonVerifyOptions CommonVerifyOptions
+	// SecurityKeyOptions represents the options for configuring security keys
+	// used in the verification process.
+	SecurityKeyOptions SecurityKeyOptions
+	// CertVerifyOptions represents the options for configuring certificate
+	// verification in the verification process.
+	CertVerifyOptions CertVerifyOptions
 
 	// IgnoreSCT indicates whether to ignore the Signed Certificate Timestamp.
 	IgnoreSCT bool
 	// SCTRef is the reference to the Signed Certificate Timestamp.
 	SCTRef string
+	// CTLogPubKeys, if set, is used to validate SCTs against those keys.
+	// It is a map from log id to LogIDMetadata. It is a map from LogID to crypto.PublicKey. LogID is derived from the PublicKey (see RFC 6962 S3.2).
+	CTLogPubKeys *cosign.TrustedTransparencyLogPubKeys
+	// KeyRef is the reference to the key.
+	KeyRef string
+	// HashAlgorithm is the hash algorithm to use.
+	HashAlgorithm crypto.Hash
+}
 
-	// UseSignedTimestamps indicates whether to use signed timestamps.
+type CommonVerifyOptions struct {
+	Offline             bool // Force offline verification
+	TSACertChainPath    string
+	IgnoreTlog          bool
+	MaxWorkers          int
 	UseSignedTimestamps bool
-	// TSACertChainPath is the path to the TSA certificate chain.
-	TSACertChainPath string
+}
 
-	// MaxWorkers is the maximum number of workers to use for parallel verification.
-	// The default value is 10.
-	MaxWorkers int
+// CertVerifyOptions is the wrapper for certificate verification.
+type CertVerifyOptions struct {
+	Cert                         string
+	CertIdentity                 string
+	CertIdentityRegexp           string
+	CertOidcIssuer               string
+	CertOidcIssuerRegexp         string
+	CertGithubWorkflowTrigger    string
+	CertGithubWorkflowSha        string
+	CertGithubWorkflowName       string
+	CertGithubWorkflowRepository string
+	CertGithubWorkflowRef        string
+	CAIntermediates              string
+	CARoots                      string
+	CertChain                    string
+	SCT                          string
+	IgnoreSCT                    bool
+}
+
+// SecurityKeyOptions is the wrapper for security key verification.
+type SecurityKeyOptions struct {
+	// Sk indicates whether to use a security key.
+	Sk bool
+	// Slot is the slot to use for the security key.
+	Slot string
 }
 
 // VerifyContextOptions defines an interface for retrieving verification options

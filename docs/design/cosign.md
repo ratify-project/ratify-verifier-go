@@ -47,3 +47,8 @@ Author: Juncheng Zhu (@junczhu)
 Implemented `TrustPolicy` for backward compatability
 
 ## Future Considerations
+
+## Reference
+
+[cosign signature spec](https://github.com/sigstore/cosign/blob/main/specs/SIGNATURE_SPEC.md)
+[cosign verification spec](https://github.com/sigstore/architecture-docs/blob/main/client-spec.md#4-verification)

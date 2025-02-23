@@ -14,3 +14,17 @@ limitations under the License.
 */
 
 package trustpolicy
+
+import (
+	"context"
+	"crypto"
+
+	"github.com/sigstore/cosign/v2/pkg/cosign"
+)
+
+type TrustPolicy interface {
+	GetName() string
+	GetKeys(ctx context.Context, namespace string) (map[string]crypto.PublicKey, error)
+	GetScopes() []string
+	GetCosignOpts(context.Context) (cosign.CheckOpts, error)
+}

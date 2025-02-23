@@ -18,6 +18,7 @@ package cosign
 import (
 	"context"
 	"crypto"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 
@@ -47,7 +48,6 @@ type VerifierOptions struct {
 	Name string
 
 	// VerifyContextOptions represents the options for verifying the context.
-	// It includes various settings and parameters that influence the verification process.
 	VerifyContextOptions verifycontextoptions.VerifyContextOptions
 
 	// Truststore is the truststore that contains the keys and certificates used for verification.
@@ -64,6 +64,9 @@ type Verifier struct {
 
 // NewVerifier creates a new cosign verifier.
 func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
+	// TODO: Consider creating a cosign verifier that validates the default verify context
+	// by ensuring that the VerifyContextOptions are properly initialized and that the
+	// Truststore contains the necessary keys and certificates for verification.
 	return &Verifier{
 		name:                 opts.Name,
 		verifyContextOptions: opts.VerifyContextOptions,
@@ -98,7 +101,7 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 		return nil, fmt.Errorf("failed to create cosign check options: %w", err)
 	}
 
-	sig, signatureDescHash, err := getgSigandSigDesc(ctx, opts)
+	sig, signatureDescHash, err := getSignatureAndHash(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signature and signature descriptor: %w", err)
 	}
@@ -106,38 +109,50 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	// TODO: update verify result
-	_, err = cosign.VerifyImageSignature(ctx, sig, signatureDescHash, checkOpts)
+
+	bundleVerified, err := cosign.VerifyImageSignature(ctx, sig, signatureDescHash, checkOpts)
 	if err != nil {
 		result.Err = err
 		return result, nil
 	}
-
+	if !bundleVerified {
+		result.Description = "no valid cosign signatures found"
+		return result, nil
+	}
 	result.Description = "cosign signature verification succeeded"
 	return result, nil
 }
 
-// getCheckOpts updates the signature verifierOpts by verifierOptions.
 func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore) (opts *cosign.CheckOpts, err error) {
-	// initialize the cosign check options
 	opts = &cosign.CheckOpts{}
 
 	if vctx.CheckClaims {
 		opts.ClaimVerifier = cosign.SimpleClaimVerifier
 	}
 
-	// If we are using signed timestamps, we need to load the TSA certificates
-	if vctx.CommonVerifyOptions.TSACertChainPath != "" || vctx.CommonVerifyOptions.UseSignedTimestamps {
-		// TODO: update cosign get TSA certs
-		tsaCertificates, err := cosign.GetTSACerts(ctx, vctx.CommonVerifyOptions.TSACertChainPath, cosign.GetTufTargets)
-		if err != nil {
-			return nil, err
-		}
-		opts.TSACertificate = tsaCertificates.LeafCert
-		opts.TSARootCertificates = tsaCertificates.RootCert
-		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
+	if err := setRekorOptions(ctx, vctx, opts); err != nil {
+		return nil, err
 	}
 
+	if err := setTSAOptions(ctx, vctx, opts); err != nil {
+		return nil, err
+	}
+
+	if vctx.KeyRef == "" && !vctx.CertVerifyOptions.IgnoreSCT {
+		opts.CTLogPubKeys = vctx.CTLogPubKeys
+	}
+
+	sigVerifier, err := getSigVerifier(ctx, vctx, s, opts)
+	if err != nil {
+		return nil, err
+	}
+	opts.SigVerifier = sigVerifier
+	opts.MaxWorkers = vctx.CommonVerifyOptions.MaxWorkers
+
+	return opts, nil
+}
+
+func setRekorOptions(ctx context.Context, vctx *verifycontextoptions.VerifyContext, opts *cosign.CheckOpts) error {
 	if !vctx.CommonVerifyOptions.IgnoreTlog {
 		rekorURL := defaultRekorURL
 		if vctx.RekorURL != "" {
@@ -146,28 +161,33 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 
 		rekorClient, err := rekor.GetRekorClient(rekorURL)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		opts.RekorClient = rekorClient
 
-		// This performs an online fetch of the Rekor public keys, but this is needed
-		// for verifying tlog entries (both online and offline).
 		opts.RekorPubKeys, err = cosign.GetRekorPubs(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
+	return nil
+}
 
-	// Ignore Signed Certificate Timestamp if the flag is set or a key is provided
-	if vctx.KeyRef == "" && !vctx.SecurityKeyOptions.Sk && !vctx.IgnoreSCT {
-		opts.CTLogPubKeys, err = cosign.GetCTLogPubs(ctx)
+func setTSAOptions(ctx context.Context, vctx *verifycontextoptions.VerifyContext, opts *cosign.CheckOpts) error {
+	if vctx.CommonVerifyOptions.TSACertChainPath != "" || vctx.CommonVerifyOptions.UseSignedTimestamps {
+		tsaCertificates, err := cosign.GetTSACerts(ctx, vctx.CommonVerifyOptions.TSACertChainPath, cosign.GetTufTargets)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		opts.TSACertificate = tsaCertificates.LeafCert
+		opts.TSARootCertificates = tsaCertificates.RootCert
+		opts.TSAIntermediateCertificates = tsaCertificates.IntermediateCerts
 	}
+	return nil
+}
 
-	// TODO: update the os operation include by the cosign library
-	var pubKey signature.Verifier = nil
+func getSigVerifier(ctx context.Context, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore, opts *cosign.CheckOpts) (signature.Verifier, error) {
+	var sigVerifier signature.Verifier
 	switch {
 	case vctx.KeyRef != "":
 		key, err := s.GetKey(ctx, vctx.KeyRef)
@@ -178,85 +198,69 @@ func getCheckOpts(ctx context.Context, vctx *verifycontextoptions.VerifyContext,
 		if vctx.HashAlgorithm != 0 {
 			hashAlgorithm = vctx.HashAlgorithm
 		}
-		pubKey, err = signature.LoadVerifier(key, hashAlgorithm)
+		sigVerifier, err = signature.LoadVerifier(key, hashAlgorithm)
 		if err != nil {
 			return nil, err
 		}
-		// pkcs11Key, ok := pubKey.(*pkcs11key.Key)
-		// if ok {
-		// 	defer pkcs11Key.Close()
-		// }
-	case vctx.SecurityKeyOptions.Sk:
-		// sk, err := pivkey.GetKeyWithSlot(vctx.SecurityKeyOptions.Slot)
-		// defer sk.Close()
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// pubKey, err = sk.Verifier()
-		// if err != nil {
-		// 	return nil, err
-		// }
 	case vctx.CertVerifyOptions.Cert != "":
 		cert, err := s.GetCertificate(ctx, vctx.CertVerifyOptions.Cert)
 		if err != nil {
 			return nil, err
 		}
-		switch {
-		case vctx.CertVerifyOptions.CertChain == "" && opts.RootCerts == nil:
-			// If no certChain and no CARoots are passed, the Fulcio root certificate will be used
-			opts.RootCerts, err = fulcioroots.Get()
-			if err != nil {
-				return nil, err
-			}
-			opts.IntermediateCerts, err = fulcioroots.GetIntermediates()
-			if err != nil {
-				return nil, err
-			}
-			pubKey, err = cosign.ValidateAndUnpackCert(cert, opts)
-			if err != nil {
-				return nil, err
-			}
-		case vctx.CertVerifyOptions.CertChain != "":
-			// Verify certificate with chain
-			chain, err := s.GetCertChain(ctx, vctx.CertVerifyOptions.CertChain)
-			if err != nil {
-				return nil, err
-			}
-			pubKey, err = cosign.ValidateAndUnpackCertWithChain(cert, chain, opts)
-			if err != nil {
-				return nil, err
-			}
-		case opts.RootCerts != nil:
-			// Verify certificate with root (and if given, intermediate) certificate
-			pubKey, err = cosign.ValidateAndUnpackCert(cert, opts)
-			if err != nil {
-				return nil, err
-			}
-		default:
+		sigVerifier, err = getKeylessVerifier(ctx, cert, vctx, s, opts)
+		if err != nil {
 			return nil, err
 		}
-
-		// TODO: fix SCT support
-		// if vctx.SCTRef != "" {
-		// 	sct, err := os.ReadFile(filepath.Clean(vctx.SCTRef))
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	opts.IgnoreSCT = vctx.IgnoreSCT
-		// 	opts.SCT = sct
-		// }
-
 	default:
-		// Do nothing. Neither keyRef, c.Sk, nor certRef were set - can happen for example when using Fulcio and TSA.
-		// For an example see the TestAttachWithRFC3161Timestamp test in test/e2e_test.go.
+		// Do nothing. Neither keyRef, Sk, nor certRef were set - can happen for example when using Fulcio and TSA.
 	}
-	opts.SigVerifier = pubKey
-	opts.MaxWorkers = vctx.CommonVerifyOptions.MaxWorkers
-
-	return opts, nil
+	return sigVerifier, nil
 }
 
-func getgSigandSigDesc(ctx context.Context, opts *ratify.VerifyOptions) (oci.Signature, v1.Hash, error) {
+func getKeylessVerifier(ctx context.Context, cert *x509.Certificate, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore, opts *cosign.CheckOpts) (signature.Verifier, error) {
+	var keylessVerifier signature.Verifier
+	var err error
+	switch {
+	case vctx.CertVerifyOptions.CertChain == "" && opts.RootCerts == nil:
+		opts.RootCerts, err = fulcioroots.Get()
+		if err != nil {
+			return nil, err
+		}
+		opts.IntermediateCerts, err = fulcioroots.GetIntermediates()
+		if err != nil {
+			return nil, err
+		}
+		keylessVerifier, err = cosign.ValidateAndUnpackCert(cert, opts)
+		if err != nil {
+			return nil, err
+		}
+	case vctx.CertVerifyOptions.CertChain != "":
+		chain, err := s.GetCertChain(ctx, vctx.CertVerifyOptions.CertChain)
+		if err != nil {
+			return nil, err
+		}
+		keylessVerifier, err = cosign.ValidateAndUnpackCertWithChain(cert, chain, opts)
+		if err != nil {
+			return nil, err
+		}
+	case vctx.CertVerifyOptions.CARoots != nil:
+		opts.RootCerts = vctx.CertVerifyOptions.CARoots
+		keylessVerifier, err = cosign.ValidateAndUnpackCert(cert, opts)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("invalid certificate options")
+	}
+
+	if vctx.CertVerifyOptions.SCT != nil {
+		opts.IgnoreSCT = vctx.CertVerifyOptions.IgnoreSCT
+		opts.SCT = vctx.CertVerifyOptions.SCT
+	}
+	return keylessVerifier, nil
+}
+
+func getSignatureAndHash(ctx context.Context, opts *ratify.VerifyOptions) (oci.Signature, v1.Hash, error) {
 	signatureDescriptors, err := getSignatureBlobDesc(ctx, opts.Store, opts.Repository, opts.ArtifactDescriptor)
 	if err != nil {
 		return nil, v1.Hash{}, fmt.Errorf("failed to get signature blob descriptor: %w", err)
@@ -297,9 +301,9 @@ func getgSigandSigDesc(ctx context.Context, opts *ratify.VerifyOptions) (oci.Sig
 
 // getStaticLayerOpts builds the cosign options for static layer signatures.
 func getStaticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
-	options := []static.Option{
-		static.WithAnnotations(desc.Annotations),
-	}
+	options := []static.Option{}
+
+	options = append(options, static.WithAnnotations(desc.Annotations))
 	if cert, chain := desc.Annotations[static.CertificateAnnotationKey], desc.Annotations[static.ChainAnnotationKey]; cert != "" && chain != "" {
 		options = append(options, static.WithCertChain([]byte(cert), []byte(chain)))
 	}

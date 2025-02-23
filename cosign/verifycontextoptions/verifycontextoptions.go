@@ -17,10 +17,59 @@ package verifycontextoptions
 
 import (
 	"crypto"
+	"crypto/x509"
 	"fmt"
 
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 )
+
+// CommonVerifyOptions contains options for verifying signatures.
+type CommonVerifyOptions struct {
+	// Force offline verification
+	Offline bool
+	// Path to TSA certificate chain
+	TSACertChainPath string
+	// Ignore transparency log
+	IgnoreTlog bool
+	// Maximum number of workers
+	MaxWorkers int
+	// Use signed timestamps
+	UseSignedTimestamps bool
+}
+
+// CertVerifyOptions is the wrapper for certificate verification.
+type CertVerifyOptions struct {
+	// Certificate
+	Cert string
+	// Certificate Identity
+	CertIdentity string
+	// Certificate Identity Regular Expression
+	CertIdentityRegexp string
+	// Certificate OIDC Issuer
+	CertOidcIssuer string
+	// Certificate OIDC Issuer Regular Expression
+	CertOidcIssuerRegexp string
+	// GitHub Workflow Trigger
+	CertGithubWorkflowTrigger string
+	// GitHub Workflow SHA
+	CertGithubWorkflowSha string
+	// GitHub Workflow Name
+	CertGithubWorkflowName string
+	// GitHub Workflow Repository
+	CertGithubWorkflowRepository string
+	// GitHub Workflow Reference
+	CertGithubWorkflowRef string
+	// CA Intermediates
+	CAIntermediates string
+	// CA Roots
+	CARoots *x509.CertPool
+	// Certificate Chain
+	CertChain string
+	// Signed Certificate Timestamp
+	SCT []byte
+	// Ignore Signed Certificate Timestamp
+	IgnoreSCT bool
+}
 
 // VerifyContext holds the options for verifying a context.
 type VerifyContext struct {
@@ -28,63 +77,16 @@ type VerifyContext struct {
 	CheckClaims bool
 	// RekorURL is the URL of the Rekor transparency log.
 	RekorURL string
-
-	// CommonVerifyOptions represents the common options used for verification
-	// in the cosign verifier.
+	// CommonVerifyOptions represents the common options used for verification in the cosign verifier.
 	CommonVerifyOptions CommonVerifyOptions
-	// SecurityKeyOptions represents the options for configuring security keys
-	// used in the verification process.
-	SecurityKeyOptions SecurityKeyOptions
-	// CertVerifyOptions represents the options for configuring certificate
-	// verification in the verification process.
+	// CertVerifyOptions represents the options for configuring certificate verification in the verification process.
 	CertVerifyOptions CertVerifyOptions
-
-	// IgnoreSCT indicates whether to ignore the Signed Certificate Timestamp.
-	IgnoreSCT bool
-	// SCTRef is the reference to the Signed Certificate Timestamp.
-	SCTRef string
-	// CTLogPubKeys, if set, is used to validate SCTs against those keys.
-	// It is a map from log id to LogIDMetadata. It is a map from LogID to crypto.PublicKey. LogID is derived from the PublicKey (see RFC 6962 S3.2).
+	// CTLogPubKeys, if set, is used to validate Signed Certificate Timestamps (SCTs) against the provided public keys. It is a map from LogID to crypto.PublicKey, where LogID is derived from the PublicKey (see RFC 6962 S3.2).
 	CTLogPubKeys *cosign.TrustedTransparencyLogPubKeys
 	// KeyRef is the reference to the key.
 	KeyRef string
 	// HashAlgorithm is the hash algorithm to use.
 	HashAlgorithm crypto.Hash
-}
-
-type CommonVerifyOptions struct {
-	Offline             bool // Force offline verification
-	TSACertChainPath    string
-	IgnoreTlog          bool
-	MaxWorkers          int
-	UseSignedTimestamps bool
-}
-
-// CertVerifyOptions is the wrapper for certificate verification.
-type CertVerifyOptions struct {
-	Cert                         string
-	CertIdentity                 string
-	CertIdentityRegexp           string
-	CertOidcIssuer               string
-	CertOidcIssuerRegexp         string
-	CertGithubWorkflowTrigger    string
-	CertGithubWorkflowSha        string
-	CertGithubWorkflowName       string
-	CertGithubWorkflowRepository string
-	CertGithubWorkflowRef        string
-	CAIntermediates              string
-	CARoots                      string
-	CertChain                    string
-	SCT                          string
-	IgnoreSCT                    bool
-}
-
-// SecurityKeyOptions is the wrapper for security key verification.
-type SecurityKeyOptions struct {
-	// Sk indicates whether to use a security key.
-	Sk bool
-	// Slot is the slot to use for the security key.
-	Slot string
 }
 
 // VerifyContextOptions defines an interface for retrieving verification options
@@ -104,7 +106,7 @@ func NewVerifyContextOptions() VerifyContextOptions {
 	}
 }
 
-// TODO: add a new with options to init the map with given options
+// TODO: NewVerifyContextOptionsWithMap initializes the verifyContextOptions with options.
 
 func (v *verifyContextOptions) GetVerifyOpts(subjectRef string) (*VerifyContext, error) {
 	opts, ok := v.optsMap[subjectRef]

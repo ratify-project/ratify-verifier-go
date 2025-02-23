@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/x509"
+	"fmt"
 )
 
 // TrustStore defines an interface for a trust store that provides methods
@@ -56,16 +57,33 @@ func NewTrustStore() TrustStore {
 	}
 }
 
-// TODO: add a new with options to init the map with given options
+// TODO: Add a NewTrustStoreWithOptions function to initialize the truststore with given options.
+// The options should include initial keys, certificates, and certificate chains.
+// The function signature should be:
+// func NewTrustStoreWithOptions(keys map[string]crypto.PublicKey, certificates map[string]*x509.Certificate, certChains map[string][]*x509.Certificate) TrustStore
 
 func (t *truststore) GetKey(ctx context.Context, keyRef string) (crypto.PublicKey, error) {
-	return t.keys[keyRef], nil
+	key, exists := t.keys[keyRef]
+	if !exists {
+		return nil, fmt.Errorf("key not found: %s", keyRef)
+	}
+	return key, nil
+
 }
 
 func (t *truststore) GetCertificate(ctx context.Context, certRef string) (*x509.Certificate, error) {
-	return t.certificates[certRef], nil
+	cert, exists := t.certificates[certRef]
+	if !exists {
+		return nil, fmt.Errorf("certificate not found for reference: %s", certRef)
+	}
+	return cert, nil
+
 }
 
 func (t *truststore) GetCertChain(ctx context.Context, certChain string) ([]*x509.Certificate, error) {
-	return t.certChains[certChain], nil
+	chain, exists := t.certChains[certChain]
+	if !exists {
+		return nil, fmt.Errorf("certificate chain not found: %s", certChain)
+	}
+	return chain, nil
 }

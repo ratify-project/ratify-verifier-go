@@ -1,5 +1,7 @@
 # Cosign Verifer Support 2025
 
+Author: Juncheng Zhu (@junczhu)
+
 `ratify-verifier-go` cosign verifier is designed to support keyed verification and keyless verification:
 
 - using `store` API to get the artifacts
@@ -37,6 +39,14 @@
 
 ### VerifyContext
 
+`VerifyContext` includes prepared context for verify which not contained by `VerifyOptions`.
+
 ### TrustStore
+
+`TrustStore` holds keys, certs and certchains for verify.
+
+### TrustPolicy
+
+Implemented `TrustPolicy` for backward compatability
 
 ## Future Considerations

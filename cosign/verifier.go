@@ -186,6 +186,8 @@ func setTSAOptions(ctx context.Context, vctx *verifycontextoptions.VerifyContext
 	return nil
 }
 
+// getSigVerifier retrieves a signature verifier based on the provided context and verification options.
+// It supports verification using a key reference or a certificate.
 func getSigVerifier(ctx context.Context, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore, opts *cosign.CheckOpts) (signature.Verifier, error) {
 	var sigVerifier signature.Verifier
 	switch {
@@ -217,6 +219,9 @@ func getSigVerifier(ctx context.Context, vctx *verifycontextoptions.VerifyContex
 	return sigVerifier, nil
 }
 
+// getKeylessVerifier returns a keyless verifier based on the provided certificate and verification context options.
+// It uses the provided trust store and cosign check options to validate and unpack the certificate.
+// Additionally, it sets the Signed Certificate Timestamp (SCT) options if provided in the verification context options.
 func getKeylessVerifier(ctx context.Context, cert *x509.Certificate, vctx *verifycontextoptions.VerifyContext, s truststore.TrustStore, opts *cosign.CheckOpts) (signature.Verifier, error) {
 	var keylessVerifier signature.Verifier
 	var err error
@@ -260,6 +265,7 @@ func getKeylessVerifier(ctx context.Context, cert *x509.Certificate, vctx *verif
 	return keylessVerifier, nil
 }
 
+// getSignatureAndHash retrieves the latest OCI signature and its corresponding hash for a given artifact.
 func getSignatureAndHash(ctx context.Context, opts *ratify.VerifyOptions) (oci.Signature, v1.Hash, error) {
 	signatureDescriptors, err := getSignatureBlobDesc(ctx, opts.Store, opts.Repository, opts.ArtifactDescriptor)
 	if err != nil {
@@ -299,7 +305,9 @@ func getSignatureAndHash(ctx context.Context, opts *ratify.VerifyOptions) (oci.S
 	return sig, signatureDescHash, nil
 }
 
-// getStaticLayerOpts builds the cosign options for static layer signatures.
+// getStaticLayerOpts generates a list of static options based on the provided OCI descriptor.
+// It extracts annotations, certificate chains, and Rekor bundles from the descriptor's annotations
+// and constructs corresponding static options.
 func getStaticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
 	options := []static.Option{}
 
@@ -318,6 +326,8 @@ func getStaticLayerOpts(desc ocispec.Descriptor) ([]static.Option, error) {
 	return options, nil
 }
 
+// getSignatureBlobDesc retrieves the signature blob descriptors for a given artifact from the specified store.
+// It fetches the manifest for the artifact, unmarshals it, and extracts the layers that match the Cosign signature media type.
 func getSignatureBlobDesc(ctx context.Context, store ratify.Store, repo string, artifactDesc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 	manifestBytes, err := store.FetchManifest(ctx, repo, artifactDesc)
 	if err != nil {

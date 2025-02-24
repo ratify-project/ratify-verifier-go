@@ -23,6 +23,13 @@ import (
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 )
 
+// VerifyContextOptions defines an interface for retrieving verification options
+// for a given subject reference.
+type VerifyContextOptions interface {
+	// GetVerifyOpts retrieves the verification options for a given subject reference.
+	GetVerifyOpts(subjectRef string) (*VerifyContext, error)
+}
+
 // CommonVerifyOptions contains options for verifying signatures.
 type CommonVerifyOptions struct {
 	// Force offline verification
@@ -87,13 +94,6 @@ type VerifyContext struct {
 	KeyRef string
 	// HashAlgorithm is the hash algorithm to use.
 	HashAlgorithm crypto.Hash
-}
-
-// VerifyContextOptions defines an interface for retrieving verification options
-// for a given subject reference.
-type VerifyContextOptions interface {
-	// GetVerifyOpts retrieves the verification options for a given subject reference.
-	GetVerifyOpts(subjectRef string) (*VerifyContext, error)
 }
 
 type verifyContextOptions struct {

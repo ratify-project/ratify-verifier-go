@@ -4,13 +4,13 @@
 
 This package contains the source code for the ratify-verifier-go cosign client library.
 
-This package is built on the sigstore-go library, a low-level Go library that provides a suite of tools and standards designed for signing, verifying, and securing software supply chains.
-Sigstore-go focuses on the core functionalities of signing and verification, offering a minimal and user-friendly API without integration of registry operations or additional features like container image management.
+This package is built on the `sigstore-go` library, a low-level Go library that provides a suite of tools and standards designed for signing, verifying, and securing software supply chains.
+`sigstore-go` focuses on the core functionalities of signing and verification, offering a minimal and user-friendly API without integration of registry operations or additional features like container image management.
 In contrast, Cosign contains higher-level APIs within the Sigstore ecosystem that integrates these functionalities with container registries and other tools for end-to-end supply chain security.
-Cosign builds on Sigstore-go and extends its capabilities to include container image signing, verification, and storage in registries.
+Cosign builds on `sigstore-go` and extends its capabilities to include container image signing, verification, and storage in registries.
 
-Using sigstore-go library makes it a more streamlined choice for developers seeking to implement lightweight and flexible signature verification.
-Additionally, the Sigstore team plans to refactor parts of Cosign to rely more heavily on Sigstore-go, making the interaction between the two libraries even closer.
+Using `sigstore-go` library makes it a more streamlined choice for developers seeking to implement lightweight and flexible signature verification.
+Additionally, the Sigstore team plans to refactor parts of Cosign to rely more heavily on `sigstore-go`, making the interaction between the two libraries even closer.
 
 ## Concepts
 
@@ -25,19 +25,18 @@ Transparency Logs
 - Verifying against these logs adds an extra layer of assurance that a signature has been publicly disclosed and has not been secretly revoked or altered.
 - As a primary and recommanded solution, Cosign will then store the signature and certificate in the Rekor transparency log.
 
-Key and Certificate Management  
-
-- Secure storage and management of public keys and trusted certificates are critical for ensuring that only legitimate signatures are accepted.
-- Techniques include the regular rotation of keys, secure bootstrapping of initial trust, and integration with existing Public Key Infrastructures (PKI).
-
 Verification Workflows  
 
 - The verifier must account for different workflows, such as verifying container images, software binaries, or other artifacts.
 - Each workflow may involve different states of metadata, such as embedded signatures versus detached signatures, and requires customization accordingly.
+- `sigstore-go` library includes a few abstractions to support different use cases, testing, and extensibility:
+
+  - `SignedEntity` - an interface type respresenting a signed message or attestation, with a signature and metadata, implemented by `Bundle`, a type which wraps the `Bundle` type from `protobuf-specs`.
+  - `TrustedMaterial` - an interface type representing a trusted set of keys or certificates for verifying certificates, timestamps, and artifact transparency logs, implemented by `TrustedRoot`
 
 ## Scenarios
 
-Sigstore-go supports multiple verification scenarios based on different signing methods, artifact types, and trust sources.
+`sigstore-go` supports multiple verification scenarios based on different signing methods, artifact types, and trust sources.
 These scenarios can be categorized into following main types and for this library we are going to implement the first four verification for basic user scenarios.
 
 | **Verification Scenario**         | **Purpose**                                                            | **Use Case**                                                                 |
@@ -70,7 +69,9 @@ Different scenarios related to keys and certificates management within the packa
 
 [Cosign Signature Spec](https://github.com/sigstore/cosign/blob/main/specs/SIGNATURE_SPEC.md)
 
-[Sigstore-go](https://github.com/sigstore/sigstore-go/tree/main)
+[Support the protobuf bundle format in Cosign](https://github.com/sigstore/cosign/issues/3139)
+
+[sigstore-go](https://github.com/sigstore/sigstore-go/tree/main)
 
 [Sigstore Client Spec](https://github.com/sigstore/architecture-docs/blob/main/client-spec.md#4-verification)
 

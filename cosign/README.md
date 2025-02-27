@@ -16,15 +16,23 @@ The `ratify-verifier-go` implementation shares the same underlying library, `sig
 
 ## Concepts
 
-Artifact signing. To sign an artifact, a signer generates a private/public key pair and uses the secret key to sign an arbitrary piece of data.
+Artifact signing: To sign an artifact, a signer generates a private/public key pair and uses the secret key to sign an arbitrary piece of data.
+
 Artifact Log: Record of artifact metadata created by signers.
+
 Identity Log: Record of mappings from identities to signing keys.
-OpenID Connect (OIDC). a widely-supported protocol allowing relying parties (applications) to verify the identity of resource owners (end users) as confirmed by identity providers.
+
+OpenID Connect (OIDC): A widely-supported protocol allowing relying parties (applications) to verify the identity of resource owners (end users) as confirmed by identity providers.
+
 Identity Provider: Mechanism vouching that an entity (individual) controls an identity (e.g., email account)
+
 Signers: Individuals vouching for the authenticity of content.
+
 Verifiers: Individuals checking that content is authentic.
+
 Certificate Authority(CA): Entity verifying identity and issues cryptographic certificates to signers.
-Webpublickeyinfrastructure (PKI) is a mature and widely deployed trust ecosystem. At its core, web PKI uses X.509 certificates to pin the trust of web servers to a “certificate authority” (or CA).
+
+Webpublickeyinfrastructure (PKI): A mature and widely deployed trust ecosystem. At its core, web PKI uses X.509 certificates to pin the trust of web servers to a “certificate authority” (or CA).
 
 ## Scenarios
 
@@ -36,27 +44,19 @@ Webpublickeyinfrastructure (PKI) is a mature and widely deployed trust ecosystem
 | **Key-Based Verification**        | Verifies signature using a known **public key**.                        | Environments where signatures are verified with a known public key. |
 | **Timestamp Verification**        | Verifies the **timestamp** of the signature to prevent time-based attacks. Not standalone verification. | Long-term signature validity checks, ensuring signatures are valid at a specific point in time. |
 | **Rekor Transparency Log (TLog)** | Verifies inclusion of the signature in the **Rekor Transparency Log** for audibility. Not standalone verification. | Auditing and compliance to ensure signatures are publicly recorded in an immutable log. |
-| **Blob Verification**             | Verifies detached file signatures (e.g., `.sig` file).                 | Verifying detached signatures for documents, binaries, or standalone files. |
-| **Bundle Verification**           | Verifies a set of files signed together as a **bundle**.               | Ensuring integrity of a collection of files or documents signed as a bundle. |
 
 ### Verification Input
 
 1. The Artifact to Verify
 The actual file, container image, or other digital asset being verified.
-Example: A container image stored in an OCI registry or a binary file.
 
-2. The Signature(s) of the Artifact
-The cryptographic signature(s) created when the artifact was signed.
-In OCI-based workflows, signatures are typically stored as OCI objects alongside the artifact.
-In detached signature workflows, the signature file (.sig) is provided separately.
+2. Verification materials
+    - The Signature(s) of the Artifact. The cryptographic signature(s) created when the artifact was signed.
+    - Verification options i.e. whether to expect SCTs, Tlog entries, or signed timestamps and expected identity and digest to verify.
 
 3. Verification Key or Certificate
     - Key-Based Verification: User provides a public key (e.g., PEM-encoded RSA, ECDSA, or Ed25519).
     - Keyless Verification (Fulcio-based Certificate Verification): User provides the signing certificate (issued by Fulcio).
-
-4. Verifier Options
-    - User provides required options i.e. whether to expect SCTs, Tlog entries, or signed timestamps.
-    - User provides policies containing the expected identity and digest to verify.
 
 ### Verification Output
 

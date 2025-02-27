@@ -2,9 +2,13 @@
 
 ## Introduction
 
-Sigstore has a canonical Go client implementation, cosign, that enables end users to leverage Fulcio’s short-lived code signing certificates and Rekor’s transparency log to confirm that an artifact was signed while the certificate was valid.
+In order to provide signatures over arbitrary artifacts, Sigstore performs three major operations:
 
-Sigstore’s Trust Root is maintained of a rotation of five keyholders from varying companies and academic institutions who contribute to Sigstore. It leverages the principles of The Update Framework (TUF).
+- OIDC Issuance, vouch that a client is in control of an identity
+- Associate short-lived public key certificates with these identities (from a Certificate Authority), and publish these certificates to an Identity Log.
+- Publish a long-lived signature over an artifact (or artifact meta-data) to an Artifact Log, allowing verifiers to check its validity.
+
+The first and second operations are performed by a system called Fulcio, which functions as a Certificate Authority and transparency log for a namespace of OIDC identities (Identity Log). The third operation is performed by a system called Rekor, a transparency log for artifact signatures (Artifact Log). And cosign is the reference Sigstore client implementation to sign arbitrary artifacts. With these components, Sigstore completed trust setup, signing and verification.
 
 The Sigstore team plans to refactor parts of cosign into a new, minimal, and user-friendly API named `sigstore-go`. Currently in beta, `sigstore-go` has passed the `sigstore-conformance` signing and verification test suite.
 `sigstore-go` is built as a modular Go codebase including cryptographic signature creation and validation, integration with external services (Fulcio for certificates and Rekor for record-keeping) and API layers.
@@ -12,21 +16,15 @@ The `ratify-verifier-go` implementation shares the same underlying library, `sig
 
 ## Concepts
 
-Artifact Signatures  
-
-- Artifacts may be signed using different cryptographic schemes. The verifier must support a variety of signature formats, including RSA, ECDSA, and Ed25519.
-- The use of DSSE helps bundle signatures with metadata, providing additional context and validation capabilities.
-
-Transparency Logs  
-
-- Transparency logs, such as those maintained by the Sigstore project, provide an immutable record of signature entries.
-- Verifying against these logs adds an extra layer of assurance that a signature has been publicly disclosed and has not been secretly revoked or altered.
-- As a primary and recommended solution, Cosign will then store the signature and certificate in the Rekor transparency log.
-
-Verification Workflows  
-
-- The verifier must account for different workflows, such as verifying container images, software binaries, or other artifacts.
-- Each workflow may involve different states of metadata, such as embedded signatures versus detached signatures, and requires customization accordingly.
+Artifact signing. To sign an artifact, a signer generates a private/public key pair and uses the secret key to sign an arbitrary piece of data.
+Artifact Log: Record of artifact metadata created by signers.
+Identity Log: Record of mappings from identities to signing keys.
+OpenID Connect (OIDC). a widely-supported protocol allowing relying parties (applications) to verify the identity of resource owners (end users) as confirmed by identity providers.
+Identity Provider: Mechanism vouching that an entity (individual) controls an identity (e.g., email account)
+Signers: Individuals vouching for the authenticity of content.
+Verifiers: Individuals checking that content is authentic.
+Certificate Authority(CA): Entity verifying identity and issues cryptographic certificates to signers.
+Webpublickeyinfrastructure (PKI) is a mature and widely deployed trust ecosystem. At its core, web PKI uses X.509 certificates to pin the trust of web servers to a “certificate authority” (or CA).
 
 ## Scenarios
 
@@ -56,9 +54,9 @@ In detached signature workflows, the signature file (.sig) is provided separatel
     - Key-Based Verification: User provides a public key (e.g., PEM-encoded RSA, ECDSA, or Ed25519).
     - Keyless Verification (Fulcio-based Certificate Verification): User provides the signing certificate (issued by Fulcio).
 
-4. Verifier Options. User provides required verifier options i.e. whether to expect SCTs, Tlog entries, or signed timestamps.
-
-5. Verification Policy. User provides policies containing the expected identity and digest to verify.
+4. Verifier Options
+    - User provides required options i.e. whether to expect SCTs, Tlog entries, or signed timestamps.
+    - User provides policies containing the expected identity and digest to verify.
 
 ### Verification Output
 
@@ -75,11 +73,9 @@ If any component of the verification fails (e.g., invalid signature, missing key
 
 ## References
 
+- [Sigstore Security Model](https://docs.sigstore.dev/about/security/)
 - [Cosign Signature Spec](https://github.com/sigstore/cosign/blob/main/specs/SIGNATURE_SPEC.md)
-- [Artifacts Guidance](https://github.com/opencontainers/image-spec/blob/main/artifacts-guidance.md)
-- [Support the protobuf bundle format in Cosign](https://github.com/sigstore/cosign/issues/3139)
-- [sigstore-go Verification Abstractions](https://github.com/sigstore/sigstore-go-archived/issues/35)
-- [sigstore-go](https://github.com/sigstore/sigstore-go/tree/main)
 - [Sigstore Client Spec](https://github.com/sigstore/architecture-docs/blob/main/client-spec.md#4-verification)
 - [Cosign Verifying Signatures Description](https://docs.sigstore.dev/cosign/verifying/verify)
-- [Sigstore Threat Model](https://docs.sigstore.dev/threat-model/)
+- [sigstore-go Verification Abstractions](https://github.com/sigstore/sigstore-go-archived/issues/35)
+- [Sigstore: Software Signing for Everybody](https://dl.acm.org/doi/pdf/10.1145/3548606.3560596)

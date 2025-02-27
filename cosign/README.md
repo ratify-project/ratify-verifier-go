@@ -2,11 +2,13 @@
 
 ## Introduction
 
-Sigstore has a canonical Go client implementation, cosign, Cosign end users can leverage Fulcio’s short-lived code signing certificates and Rekor’s transparency log to confirm that an artifact was signed while the certificate was valid.
+Sigstore has a canonical Go client implementation, cosign, that enables end users to leverage Fulcio’s short-lived code signing certificates and Rekor’s transparency log to confirm that an artifact was signed while the certificate was valid.
 
-Sigstore’s Trust Root is made up of a rotation of five keyholders from varying companies and academic institutions who contribute to Sigstore. It leverages the principles of The Update Framework (TUF).
+Sigstore’s Trust Root is maintained of a rotation of five keyholders from varying companies and academic institutions who contribute to Sigstore. It leverages the principles of The Update Framework (TUF).
 
-Sigstore team is planning to refactor part of cosign on `sigstore-go`, a more minimal and friendly API for integrating Go code with Sigstore.`sigstore-go` is currently beta, pass the `sigstore-conformance` signing and verification test suite. This verifier implementation uses the same library as for building cosign verifier.
+The Sigstore team plans to refactor parts of cosign into a new, minimal, and user-friendly API named `sigstore-go`. Currently in beta, `sigstore-go` has passed the `sigstore-conformance` signing and verification test suite.
+`sigstore-go` is built as a modular Go codebase including cryptographic signature creation and validation, integration with external services (Fulcio for certificates and Rekor for record-keeping) and API layers.
+The `ratify-verifier-go` implementation shares the same underlying library, `sigstore-go`, as the cosign verifier.
 
 ## Concepts
 
@@ -28,8 +30,7 @@ Verification Workflows
 
 ## Scenarios
 
-`sigstore-go` supports multiple verification scenarios based on different signing methods, artifact types, and trust sources.
-These scenarios can be categorized into the following main types.
+`sigstore-go` supports multiple verification scenarios based on different signing methods, artifact types, and trust sources. These scenarios can be categorized into the following main types.
 
 | **Verification Scenario**         | **Purpose**                                                            | **Use Case**                                                                 |
 |-----------------------------------|------------------------------------------------------------------------|-----------------------------------------------------------------------------|
@@ -40,9 +41,37 @@ These scenarios can be categorized into the following main types.
 | **Blob Verification**             | Verifies detached file signatures (e.g., `.sig` file).                 | Verifying detached signatures for documents, binaries, or standalone files. |
 | **Bundle Verification**           | Verifies a set of files signed together as a **bundle**.               | Ensuring integrity of a collection of files or documents signed as a bundle. |
 
-### Verifier Input and Potential Output
+### Verification Input
 
-A Verifier accepts a `SignedEntity` and a `Policy` and returns a `VerificationResult` including verification result as a boolean.
+1. The Artifact to Verify
+The actual file, container image, or other digital asset being verified.
+Example: A container image stored in an OCI registry or a binary file.
+
+2. The Signature(s) of the Artifact
+The cryptographic signature(s) created when the artifact was signed.
+In OCI-based workflows, signatures are typically stored as OCI objects alongside the artifact.
+In detached signature workflows, the signature file (.sig) is provided separately.
+
+3. Verification Key or Certificate
+    - Key-Based Verification: User provides a public key (e.g., PEM-encoded RSA, ECDSA, or Ed25519).
+    - Keyless Verification (Fulcio-based Certificate Verification): User provides the signing certificate (issued by Fulcio).
+
+4. Verifier Options. User provides required verifier options i.e. whether to expect SCTs, Tlog entries, or signed timestamps.
+
+5. Verification Policy. User provides policies containing the expected identity and digest to verify.
+
+### Verification Output
+
+Upon successful verification—meaning the signature is valid and all criteria are met—the output includes key information such as:
+
+verification_success: Indicates if the verification was successful.
+artifact_digest: The cryptographic hash of the artifact.
+signer_identity: The identity associated with the signing certificate (if keyless signing was used).
+signing_cert: Metadata about the Fulcio-issued certificate (if applicable).
+rekor_entry: Confirms whether the signature exists in the transparency log (for keyless verification).
+timestamp_verified: Ensures that the signature has a valid timestamp (if timestamping was used).
+
+If any component of the verification fails (e.g., invalid signature, missing key, revoked certificate), the verifier returns an error.
 
 ## References
 

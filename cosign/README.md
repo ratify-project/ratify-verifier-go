@@ -2,7 +2,11 @@
 
 ## Introduction
 
-This package contains the source code for the ratify-verifier-go cosign client library.
+Sigstore has a canonical Go client implementation, cosign, Cosign end users can leverage Fulcio’s short-lived code signing certificates and Rekor’s transparency log to confirm that an artifact was signed while the certificate was valid.
+
+Sigstore’s Trust Root is made up of a rotation of five keyholders from varying companies and academic institutions who contribute to Sigstore. It leverages the principles of The Update Framework (TUF).
+
+Sigstore team is planning to refactor part of cosign on `sigstore-go`, a more minimal and friendly API for integrating Go code with Sigstore.`sigstore-go` is currently beta, pass the `sigstore-conformance` signing and verification test suite. This verifier implementation uses the same library as for building cosign verifier.
 
 ## Concepts
 

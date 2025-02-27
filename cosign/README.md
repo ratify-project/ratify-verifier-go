@@ -37,19 +37,17 @@ Verification Workflows
 ## Scenarios
 
 `sigstore-go` supports multiple verification scenarios based on different signing methods, artifact types, and trust sources.
-These scenarios can be categorized into following main types and for this library we are going to implement the first four verification for basic user scenarios.
+These scenarios can be categorized into following main types.
 
 | **Verification Scenario**         | **Purpose**                                                            | **Use Case**                                                                 |
 |-----------------------------------|------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| **Keyless Verification**          | Verifies signature using **OIDC/Fulcio**-based trust (no private key needed). | CI/CD pipelines or automated workflows where no private key management is needed. |
-| **Rekor Transparency Log (TLog)** | Verifies inclusion of the signature in the **Rekor Transparency Log** for audibility. | Auditing and compliance to ensure signatures are publicly recorded in an immutable log. |
-| **Timestamp Verification**        | Verifies the **timestamp** of the signature to prevent time-based attacks. | Long-term signature validity checks, ensuring signatures are valid at a specific point in time. |
+| **Keyless Verification**          | Fulcio issues short-lived certificates binding an ephemeral key to an OpenID Connect identity. Signing events are logged in Rekor, a signature transparency log. | CI/CD pipelines or automated workflows where no private key management is needed. |
 | **Key-Based Verification**        | Verifies signature using a known **public key**.                        | Environments where signatures are verified with a known public key. |
+| **Timestamp Verification**        | Verifies the **timestamp** of the signature to prevent time-based attacks. This verification is not standalone. | Long-term signature validity checks, ensuring signatures are valid at a specific point in time. |
 | **Blob Verification**             | Verifies detached file signatures (e.g., `.sig` file).                 | Verifying detached signatures for documents, binaries, or standalone files. |
 | **Bundle Verification**           | Verifies a set of files signed together as a **bundle**.               | Ensuring integrity of a collection of files or documents signed as a bundle. |
-| **SCT Verification**              | Verifies **timestamp** of a certificate to ensure it was issued at a specific time. | Verifying certificates with timestamps for **long-term validity** or **audit trails**. |
 
-Different scenarios related to keys and certificates management within the package
+Different scenarios related to keys and certificates management.
 
 | **Component**                      | **Key Management Role**                                                                                 |
 |------------------------------------|---------------------------------------------------------------------------------------------------------|
@@ -66,14 +64,10 @@ Different scenarios related to keys and certificates management within the packa
 
 ## References
 
-[Cosign Signature Spec](https://github.com/sigstore/cosign/blob/main/specs/SIGNATURE_SPEC.md)
-
-[Support the protobuf bundle format in Cosign](https://github.com/sigstore/cosign/issues/3139)
-
-[sigstore-go](https://github.com/sigstore/sigstore-go/tree/main)
-
-[Sigstore Client Spec](https://github.com/sigstore/architecture-docs/blob/main/client-spec.md#4-verification)
-
-[Cosign Verifying Signatures Description](https://docs.sigstore.dev/cosign/verifying/verify)
-
-[Sigstore Threat Model](https://docs.sigstore.dev/threat-model/)
+- [Cosign Signature Spec](https://github.com/sigstore/cosign/blob/main/specs/SIGNATURE_SPEC.md)
+- [Artifacts Guidance](https://github.com/opencontainers/image-spec/blob/main/artifacts-guidance.md)
+- [Support the protobuf bundle format in Cosign](https://github.com/sigstore/cosign/issues/3139)
+- [sigstore-go](https://github.com/sigstore/sigstore-go/tree/main)
+- [Sigstore Client Spec](https://github.com/sigstore/architecture-docs/blob/main/client-spec.md#4-verification)
+- [Cosign Verifying Signatures Description](https://docs.sigstore.dev/cosign/verifying/verify)
+- [Sigstore Threat Model](https://docs.sigstore.dev/threat-model/)

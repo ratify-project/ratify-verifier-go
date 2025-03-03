@@ -55,25 +55,25 @@ The `ratify-verifier-go` implementation shares the same underlying library, `sig
 
 ## Concepts
 
-Artifact signing: To sign an artifact, a signer generates a private/public key pair and uses the secret key to sign an arbitrary piece of data.
+**Artifact signing**: To sign an artifact, a signer generates a private/public key pair and uses the secret key to sign an arbitrary piece of data.
 
-Artifact Log: Record of artifact metadata created by signers.
+**OpenID Connect (OIDC)**: A widely-supported protocol allowing relying parties (applications) to verify the identity of resource owners (end users) as confirmed by identity providers.
 
-Identity Log: Record of mappings from identities to signing keys.
+**OIDC Provider**: Mechanism vouching that an entity (individual) controls an identity (e.g., email account)
 
-OpenID Connect (OIDC): A widely-supported protocol allowing relying parties (applications) to verify the identity of resource owners (end users) as confirmed by identity providers.
+**Signers**: Individuals vouching for the authenticity of content.
 
-Identity Provider: Mechanism vouching that an entity (individual) controls an identity (e.g., email account)
+**Verifiers**: Individuals checking that content is authentic.
 
-Signers: Individuals vouching for the authenticity of content.
+**Artifact Log**: Record of artifact metadata created by signers.
 
-Verifiers: Individuals checking that content is authentic.
+**Identity Log**: Record of mappings from identities to signing keys.
 
-Certificate Authority(CA): Entity verifying identity and issues cryptographic certificates to signers.
+**Certificate Authority(CA)**: Entity verifying identity and issues cryptographic certificates to signers.
 
-Public-key Infrastructure (PKI): A set of roles, policies, hardware, software and procedures needed to create, manage, distribute, use, store and revoke digital certificates and manage public-key encryption.
+**Public-key Infrastructure (PKI)**: A set of roles, policies, hardware, software and procedures needed to create, manage, distribute, use, store and revoke digital certificates and manage public-key encryption.
 
-Public Key Certificate: In cryptography, a public key certificate, is an electronic document used to prove the validity of a public key.
+**Public Key Certificate**: In cryptography, a public key certificate, is an electronic document used to prove the validity of a public key.
 
 ## Scenarios
 
@@ -86,7 +86,7 @@ Public Key Certificate: In cryptography, a public key certificate, is an electro
 | **Timestamp Verification**        | Verifies the **timestamp** of the signature to prevent time-based attacks. Not standalone verification. | Long-term signature validity checks, ensuring signatures are valid at a specific point in time. |
 | **Rekor Transparency Log (TLog)** | Verifies inclusion of the signature in the **Rekor Transparency Log** for audibility. Not standalone verification. | Auditing and compliance to ensure signatures are publicly recorded in an immutable log. |
 
-### Verification Input
+### Cosign Verifier Input
 
 1. The Artifact to Verify
     - Artifacts in OCI-compliant registries.
@@ -96,14 +96,16 @@ Public Key Certificate: In cryptography, a public key certificate, is an electro
     - Verification options i.e. whether to expect SCTs (a service compliant with [RFC 6962](https://datatracker.ietf.org/doc/html/rfc6962)), Tlog entries, or signed timestamps and expected identity and digest to verify.
 
 3. Verification Key or Certificate
-    - Key-Based Verification: User provides a public key (e.g., PEM-encoded RSA, ECDSA, or Ed25519).
-    - Keyless Verification (Fulcio-based Certificate Verification): User provides the signing certificate (issued by Fulcio).
+    - Key-Based Verification: User provides a public key, certificate is not supported.
+    - Keyless Verification (Fulcio-based Certificate Verification): Retrieves Fulcio certificate(s) or certificate chain embeded in the signature.
 
-### Verification Output
+### Cosign Verifier Output
 
-Upon successful verification—meaning the signature is valid and all criteria are met—the output includes key information such as:
+The output format is defined by `ratify-go` and illustrates if the signature is valid and all criteria are met. It includes detailed information such as:
 
 - verification_success: Indicates if the verification was successful.
+
+- verifier reference:  The verifier that generated the result.
 
 - artifact_digest: The cryptographic hash of the artifact.
 
@@ -114,8 +116,6 @@ Upon successful verification—meaning the signature is valid and all criteria a
 - rekor_entry: Confirms whether the signature exists in the transparency log (for keyless verification).
 
 - timestamp_verified: Ensures that the signature has a valid timestamp (if timestamping was used).
-
-If any component of the verification fails (e.g., invalid signature, missing key, revoked certificate), the verifier returns an error.
 
 ## References
 

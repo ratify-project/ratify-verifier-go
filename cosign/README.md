@@ -89,19 +89,19 @@ The `ratify-verifier-go` implementation shares the same underlying library, `sig
 ### Cosign Verifier Input
 
 1. The Artifact to Verify
-    - Artifacts in OCI-compliant registries.
+    - The artifact in OCI-compliant registries.
 
-2. Verification materials
-    - The Signature(s) of the Artifact[4]. The cryptographic signature(s) created when the artifact was signed.
-    - Verification options i.e. whether to expect SCTs (a service compliant with [RFC 6962](https://datatracker.ietf.org/doc/html/rfc6962)), Tlog entries, or signed timestamps and expected identity and digest to verify.
+2. Verification Materials
+    - The signature(s) of the artifact[4]: The cryptographic signature(s) created when the artifact was signed.
+    - Verification options: i.e. whether to expect SCTs (a service compliant with [RFC 6962](https://datatracker.ietf.org/doc/html/rfc6962)), TLog entries, or signed timestamps and expected identity and digest to verify.
 
 3. Verification Key or Certificate
-    - Key-Based Verification: User provides a public key, certificate is not supported.
-    - Keyless Verification (Fulcio-based Certificate Verification): Retrieves Fulcio certificate(s) or certificate chain embeded in the signature.
+    - Keyless Verification: Retrieves an x509 certificate on the signature and verify against Fulcio root trust.
+    - Key-Based Verification: User provides a public key, certificate or certificate chain.
 
 ### Cosign Verifier Output
 
-The output format is defined by `ratify-go` and illustrates if the signature is valid and all criteria are met. It includes detailed information such as:
+The output format is defined by `ratify-go`, illustrates if the signature is valid and all criteria are met. It includes detailed information such as:
 
 - verification_success: Indicates if the verification was successful.
 
@@ -119,7 +119,7 @@ The output format is defined by `ratify-go` and illustrates if the signature is 
 
 ## References
 
-[1] Zachary Newman, John Speed Meyers, and Santiago Torres-Arias, “Sigstore: Software Signing for Everybody” CCS ’22, Los Angeles, CA, USA 2353-2365 [https://doi.org/10.1145/3548606.3560596](https://doi.org/10.1145/3548606.3560596)
+[1] [Zachary Newman, John Speed Meyers, and Santiago Torres-Arias, “Sigstore: Software Signing for Everybody” CCS ’22, Los Angeles, CA, USA 2353-2365 https://doi.org/10.1145/3548606.3560596](https://doi.org/10.1145/3548606.3560596)
 
 [2] [Sigstore Security Model](https://docs.sigstore.dev/about/security/)
 

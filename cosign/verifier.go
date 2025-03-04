@@ -21,6 +21,8 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	ratify "github.com/ratify-project/ratify-go"
+	"github.com/sigstore/sigstore-go/pkg/bundle"
+	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/verify"
 )
 
@@ -32,10 +34,10 @@ const (
 // VerifierOptions contains the options for creating a new Cosign verifier.
 type VerifierOptions struct {
 	Name                  string
-	CosignVerifierOption  *cosignVerifierOption
-	TrustedMaterialOption *trustedMaterialOption
+	CosignVerifierOptions []verify.VerifierOption
+	TrustedMaterial       root.TrustedMaterial
 	MinBundleVersion      string
-	TrustedPublicOptions  []trustedPolicyOption
+	TrustedPublicOptions  map[string]trustedPolicyOption
 }
 
 // Verifier is a ratify.Verifier implementation that verifies Cosign
@@ -43,19 +45,13 @@ type VerifierOptions struct {
 type Verifier struct {
 	name                 string
 	minBundleVersion     string
-	trustedPolicyOptions []trustedPolicyOption
+	trustedPolicyOptions map[string]trustedPolicyOption
 	verifier             *verify.SignedEntityVerifier
 }
 
 // NewVerifier creates a new Cosign verifier.
 func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
-	ctx := context.Background()
-	options := prepareVerifierOptions(opts.CosignVerifierOption)
-	trustmaterial, err := prepareTrustedMaterial(ctx, opts.TrustedMaterialOption)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare trusted material: %w", err)
-	}
-	v, err := verify.NewSignedEntityVerifier(trustmaterial, options...)
+	v, err := verify.NewSignedEntityVerifier(opts.TrustedMaterial, opts.CosignVerifierOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cosign verifier: %w", err)
 	}
@@ -85,32 +81,21 @@ func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 
 // Verify verifies the Cosign signature.
 func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*ratify.VerificationResult, error) {
-	// TODO: prepareVerifierOptions
+	var b *bundle.Bundle
+	var artifactPolicy verify.ArtifactPolicyOption
+	var artifactDigest string
+	var identityPolicies []verify.PolicyOption
+	var err error
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-
-	signedEntityDesc, err := getSignatureBlobDesc(ctx, opts.Store, opts.Repository, opts.ArtifactDescriptor)
-	if err != nil {
-		result.Err = err
-		return result, nil
+	// TODO: update identity policy
+	b, artifactDigest, err = bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), v.requireTlog(), v.requireTimestamp())
+	if artifactDigest != "" {
+		// TODO: update artifact policy
 	}
-	entity, err := prepareSignedEntity(signedEntityDesc, v.minBundleVersion)
-	if err != nil {
-		result.Err = err
-		return result, nil
-	}
-	trustPolicyOption, err := resolveTrustPolicy(signedEntityDesc)
-	if err != nil {
-		result.Err = err
-		return result, nil
-	}
-	pb, err := preparePolicyBuilder(ctx, trustPolicyOption)
-	if err != nil {
-		result.Err = err
-		return result, nil
-	}
-	outcome, err := v.verifier.Verify(entity, pb)
+	// Verify checks the cryptographic integrity
+	outcome, err := v.verifier.Verify(b, verify.NewPolicy(artifactPolicy, identityPolicies...))
 	if err != nil {
 		result.Err = err
 		return result, nil
@@ -124,4 +109,14 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	}
 	result.Description = "Cosign signature verification succeeded"
 	return result, nil
+}
+
+// TODO: Implement the following functions
+func (v *Verifier) requireTlog() bool {
+	return false
+}
+
+// TODO: Implement the following functions
+func (v *Verifier) requireTimestamp() bool {
+	return false
 }

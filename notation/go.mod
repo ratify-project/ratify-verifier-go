@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/notaryproject/notation-core-go v1.2.0
 	github.com/notaryproject/notation-go v1.3.1
-	github.com/opencontainers/image-spec v1.1.0
+	github.com/opencontainers/image-spec v1.1.1
 	github.com/ratify-project/ratify-go v0.0.0-20250210030230-fce66985bcc3
 )
 

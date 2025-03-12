@@ -61,6 +61,7 @@ type trustedPolicyOption struct {
 	minBundleVersion        string
 }
 
+// testing purposes only
 type nonExpiringVerifier struct {
 	signature.Verifier
 }
@@ -69,6 +70,7 @@ func (*nonExpiringVerifier) ValidAtTime(_ time.Time) bool {
 	return true
 }
 
+// testing purposes only
 func trustedPublicKeyMaterial(pk crypto.PublicKey) *root.TrustedPublicKeyMaterial {
 	return root.NewTrustedPublicKeyMaterial(func(string) (root.TimeConstrainedVerifier, error) {
 		verifier, err := signature.LoadECDSAVerifier(pk.(*ecdsa.PublicKey), crypto.SHA256)

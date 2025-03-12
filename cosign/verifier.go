@@ -28,7 +28,6 @@ import (
 
 const (
 	cosignVerifierType = "cosign"
-	artifactTypeCosign = "application/vnd.dev.cosign.artifact.sig.v1+json"
 )
 
 // VerifierOptions contains the options for creating a new Cosign verifier.
@@ -76,6 +75,8 @@ func (v *Verifier) Type() string {
 
 // Verifiable returns true if the artifact is a Cosign signature.
 func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
+	// TODO: Implement the following functions by check the artifact signature with default tag-based discovery.
+	// customize the signature or provide singature in reference is not supported yet.
 	return true
 }
 

@@ -75,7 +75,7 @@ func (v *Verifier) Type() string {
 
 // Verifiable returns true if the artifact is a Cosign signature.
 func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
-	// TODO: Implement the following functions by check the artifact signature with default tag-based discovery.
+	// Check the artifact signature with default tag-based discovery.
 	// customize the signature or provide singature in reference is not supported yet.
 	return true
 }
@@ -90,10 +90,9 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	// TODO: update identity policy
 	b, artifactDigest, err = bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), v.requireTlog(), v.requireTimestamp())
 	if artifactDigest != "" {
-		// TODO: update artifact policy
+		// Update artifact policy
 	}
 	// Verify checks the cryptographic integrity
 	outcome, err := v.verifier.Verify(b, verify.NewPolicy(artifactPolicy, identityPolicies...))

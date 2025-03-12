@@ -46,7 +46,6 @@ type trustedMaterialOption struct {
 	tufTrustedRoot      string
 }
 
-// TODO: need to be decoupled as artifactOptions and policyOptions
 type trustedPolicyOption struct {
 	artifact                string
 	artifactDigest          string

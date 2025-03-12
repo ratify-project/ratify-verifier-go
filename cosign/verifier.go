@@ -90,7 +90,7 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	b, artifactDigest, err = bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), v.requireTlog(), v.requireTimestamp())
+	b, artifactDigest, err = bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), requireTlog(), requireTimestamp())
 	if artifactDigest != "" {
 		// Update artifact policy
 	}
@@ -112,11 +112,11 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 }
 
 // TODO: Implement the following functions
-func (v *Verifier) requireTlog() bool {
-	return false
+func requireTlog() bool {
+	return true
 }
 
 // TODO: Implement the following functions
-func (v *Verifier) requireTimestamp() bool {
-	return false
+func requireTimestamp() bool {
+	return true
 }

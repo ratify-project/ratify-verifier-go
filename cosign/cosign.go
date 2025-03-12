@@ -39,11 +39,13 @@ import (
 	"github.com/sigstore/sigstore/pkg/signature"
 )
 
-type trustedMaterialOption struct {
-	trustedPublicKey    string
-	trustedrootJSONpath string
-	tufRootURL          string
-	tufTrustedRoot      string
+type verifyTrustedMaterial struct {
+	root.TrustedMaterial
+	keyTrustedMaterial root.TrustedMaterial
+}
+
+func (v *verifyTrustedMaterial) PublicKeyVerifier(hint string) (root.TimeConstrainedVerifier, error) {
+	return v.keyTrustedMaterial.PublicKeyVerifier(hint)
 }
 
 type trustedPolicyOption struct {

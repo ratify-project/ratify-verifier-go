@@ -1,4 +1,4 @@
-# Cosign Verifier
+# Cosign Library Grossary
 
 ## Introduction
 
@@ -14,7 +14,7 @@ Sigstore compares a tuple of signature, key/certificate, and artifact from the t
 
 ```mermaid
 flowchart TD
-    subgraph Sigstore Trust Infra
+    subgraph Sigstore Trust Infrastrusture
         TUF[Root Key Ceremony] -->|Establishes| TR[Sigstore Trust Root]
         TR -->|Manages Entry| CA[Fulcio]
         TR -->|Manages Entry| REKOR[Rekor]
@@ -40,7 +40,7 @@ flowchart TD
         VR -->|f. Provides Verify Result| VU
     end
 
-    subgraph OCI Registry
+    subgraph OCI Distribution
         VR -->|a. Retrieves Artifacts| REG[OCI Registry]
         SR -->|5.Signs & Publishes| REG
     end
@@ -80,13 +80,13 @@ NOTE: The Sigstore team plans to refactor parts of Cosign into a new, minimal, a
 |-----------------------------------|------------------------------------------------------------------------|-----------------------------------------------------------------------------|
 | **Keyless Verification**          | Verifies signatures from Rekor, trust material (signed certificate timestamp) from the CT log, and certificates that chain up to Fulcio. | CI/CD pipelines or automated workflows where no private key management is needed. |
 | **Key-Based Verification**        | Verifies signature using a known **public key**.                        | Using an on-disk public key, or a key provided by other providers (e.g., "KMS provider") |
-| **Timestamp Verification**        | Verifies the **timestamp** of the signature to prevent time-based attacks. Not standalone verification. | Sigstore clients relying on Rekor to provide the timestamp use the entry’s inclusion time. Sigstore also supports signed timestamps. Trusted Timestamp Authorities (TSAs) issue signed timestamps following the RFC 3161 specification. |
 | **Transparency Log Verification** | Verifies inclusion of the signature in the **Rekor Transparency Log** for audibility. Not standalone verification. | Checked the Rekor Transparency Log to ensure signatures are publicly recorded. |
+| **Timestamp Verification**        | Verifies the **timestamp** of the signature to prevent time-based attacks. Not standalone verification. | Sigstore clients relying on Rekor to provide the timestamp use the entry’s inclusion time. Sigstore also supports signed timestamps. Trusted Timestamp Authorities (TSAs) issue signed timestamps following the RFC 3161 specification. |
 
-### Cosign Keyless Verify Input
+### Cosign Library Keyless Input
 
 1. The Artifact to Verify
-    - The OCI artifacts.
+    - The OCI subject.
 
 2. Verification Materials
     - Identity Parameters: Restrict verification to specific OIDC identities. Valid values include email address, DNS names, IP addresses, and URIs.
@@ -94,15 +94,15 @@ NOTE: The Sigstore team plans to refactor parts of Cosign into a new, minimal, a
     - Certificate Chain(Optional): Provide user-provided trusted chain for verification.
     - Rekor URL(Optional): Specify a custom Rekor instance, default value is `https://rekor.sigstore.dev`.
 
-### Cosign Key-based Verify Input
+### Cosign Library Key-based Verify Input
 
 1. The Artifacts to Verify
-    - The OCI artifacts.
+    - The OCI subject.
 
 2. Verification Materials
     - Public Key: The public key in PEM format, corresponding to the private key used to sign the artifact.
     - Certificate Chain(Optional): Provide user-provided trusted chain for verification.
-    - Rekor URL(Optional): Specify a custom Rekor instance, default value is https://rekor.sigstore.dev.
+    - Rekor URL(Optional): Specify a custom Rekor instance, default value is `https://rekor.sigstore.dev`.
 
 NOTE: With OCI artifacts, the signatures and certificates are attached to the OCI artifacts by default.
 

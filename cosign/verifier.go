@@ -75,8 +75,8 @@ func (v *Verifier) Type() string {
 
 // Verifiable returns true if the artifact is a Cosign signature.
 func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
-	// Check the artifact signature with default tag-based discovery.
-	// customize the signature or provide singature in reference is not supported yet.
+	// TODO: Use regex to check if the artifact is a Cosign signature
+	// e.g., "mediaType": "application/vnd.dev.cosign.simplesigning.v1+json"
 	return true
 }
 

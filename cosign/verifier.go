@@ -21,7 +21,6 @@ import (
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	ratify "github.com/ratify-project/ratify-go"
-	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/verify"
 )
@@ -82,19 +81,16 @@ func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 
 // Verify verifies the Cosign signature.
 func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*ratify.VerificationResult, error) {
-	var b *bundle.Bundle
-	var artifactPolicy verify.ArtifactPolicyOption
-	var artifactDigest string
-	var identityPolicies []verify.PolicyOption
-	var err error
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	b, artifactDigest, err = bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), requireTlog(), requireTimestamp())
+	b, artifactDigest, err := bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), requireTlog(), requireTimestamp())
 	if artifactDigest != "" {
 		// Update artifact policy
 	}
 	// Verify checks the cryptographic integrity
+	var artifactPolicy verify.ArtifactPolicyOption
+	var identityPolicies []verify.PolicyOption
 	outcome, err := v.verifier.Verify(b, verify.NewPolicy(artifactPolicy, identityPolicies...))
 	if err != nil {
 		result.Err = err

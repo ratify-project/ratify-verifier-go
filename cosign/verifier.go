@@ -43,7 +43,6 @@ type VerifierOptions struct {
 // signatures.
 type Verifier struct {
 	name                 string
-	minBundleVersion     string
 	trustedPolicyOptions map[string]trustedPolicyOption
 	verifier             *verify.SignedEntityVerifier
 }
@@ -54,10 +53,10 @@ func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cosign verifier: %w", err)
 	}
+	// TODO: intialize the verifier with the trusted material
 
 	return &Verifier{
 		name:                 opts.Name,
-		minBundleVersion:     opts.MinBundleVersion,
 		trustedPolicyOptions: opts.TrustedPublicOptions,
 		verifier:             v,
 	}, nil
@@ -74,6 +73,7 @@ func (v *Verifier) Type() string {
 }
 
 // Verifiable returns true if the artifact is a Cosign signature.
+// Require signer sign with flag RegistryReferrersModeOCI11
 func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
 	// TODO: Use regex to check if the artifact is a Cosign signature
 	// e.g., "mediaType": "application/vnd.dev.cosign.simplesigning.v1+json"

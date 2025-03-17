@@ -27,6 +27,7 @@ import (
 
 const (
 	cosignVerifierType = "cosign"
+	artifactTypeCosign = "vnd.dev.cosign.artifact.sig.v1+json"
 )
 
 // VerifierOptions contains the options for creating a new Cosign verifier.
@@ -34,16 +35,14 @@ type VerifierOptions struct {
 	Name                  string
 	CosignVerifierOptions []verify.VerifierOption
 	TrustedMaterial       root.TrustedMaterial
-	MinBundleVersion      string
-	TrustedPublicOptions  map[string]trustedPolicyOption
 }
 
 // Verifier is a ratify.Verifier implementation that verifies Cosign
 // signatures.
 type Verifier struct {
-	name                 string
-	trustedPolicyOptions map[string]trustedPolicyOption
-	verifier             *verify.SignedEntityVerifier
+	name             string
+	trustedPolicyMux map[string]trustedPolicyOption
+	verifier         *verify.SignedEntityVerifier
 }
 
 // NewVerifier creates a new Cosign verifier.
@@ -52,12 +51,9 @@ func NewVerifier(opts *VerifierOptions) (*Verifier, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cosign verifier: %w", err)
 	}
-	// TODO: intialize the verifier with the trusted material
-
 	return &Verifier{
-		name:                 opts.Name,
-		trustedPolicyOptions: opts.TrustedPublicOptions,
-		verifier:             v,
+		name:     opts.Name,
+		verifier: v,
 	}, nil
 }
 
@@ -74,9 +70,7 @@ func (v *Verifier) Type() string {
 // Verifiable returns true if the artifact is a Cosign signature.
 // Require signer sign with flag RegistryReferrersModeOCI11
 func (v *Verifier) Verifiable(artifact ocispec.Descriptor) bool {
-	// TODO: Use regex to check if the artifact is a Cosign signature
-	// e.g., "mediaType": "application/vnd.dev.cosign.simplesigning.v1+json"
-	return true
+	return artifact.ArtifactType == artifactTypeCosign && artifact.MediaType == ocispec.MediaTypeImageManifest
 }
 
 // Verify verifies the Cosign signature.
@@ -84,13 +78,14 @@ func (v *Verifier) Verify(ctx context.Context, opts *ratify.VerifyOptions) (*rat
 	result := &ratify.VerificationResult{
 		Verifier: v,
 	}
-	b, artifactDigest, err := bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), requireTlog(), requireTimestamp())
-	if artifactDigest != "" {
-		// Update artifact policy
+	b, _, err := bundleFromOCIImage(opts.Repository+"@"+opts.SubjectDescriptor.Digest.String(), requireTlog(), requireTimestamp())
+	if err != nil {
+		result.Err = err
+		return result, nil
 	}
-	// Verify checks the cryptographic integrity
 	var artifactPolicy verify.ArtifactPolicyOption
 	var identityPolicies []verify.PolicyOption
+	// Verify checks the cryptographic integrity
 	outcome, err := v.verifier.Verify(b, verify.NewPolicy(artifactPolicy, identityPolicies...))
 	if err != nil {
 		result.Err = err

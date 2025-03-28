@@ -89,11 +89,14 @@ flowchart TD
     - Public Key: The publicly disclosable component of a pair of cryptographic keys used for asymmetric cryptography.
     - Public-key Certificate: A public-key certificate binds a subject name to a public key value, along with information needed to perform certain cryptographic functions using that key.
     - Public-key Infrastructure (PKI): A system of CAs (and, optionally, RAs and other supporting servers and agents) that perform some set of certificate management, archive management, key management, and token management functions for a community of users in an application of asymmetric cryptography. The core PKI functions are (a) to register users and issue their public-key certificates, (b) to revoke certificates when required, and (c) to archive data needed to validate certificates at a much later time.
+    > [!NOTE]
+    > Cosign's keyless scenario does not follow the PKI model.
     - Root CA: The root CA in a certification hierarchy issues public-key certificates to one or more additional CAs that form the second-highest level. Each of these CAs may issue certificates to more CAs at the third-highest level, and so on. To initialize operation of a hierarchical PKI, the root's initial public key is securely distributed to all certificate users in a way that does not depend on the PKI's certification relationships.
     - Root of Trust: Sigstore’s root of trust, which includes Fulcio’s root CA certificate and Rekor’s public key, are distributed by The Update Framework (TUF). TUF is a framework to provide secure software and file updates.
     - Trust Anchor: A trust anchor may be defined as being based on a public key, a CA, a public-key certificate, or some combination or variation of those. The trusted anchor information is trusted because it was delivered to the path processing procedure by some trustworthy out-of-band procedure.
 
 4. Transparency and Auditability
+    - TOFU: Trust on first use(TOFU) is an authentication system used to bootstrap trust between two entities on an untrusted network.
     - Identity Log: An online provided record, that maps verified identities to their associated signing keys. Such logs help establish trust by providing a history of key associations.
     - Artifact Log: An online/offline provided record that contains metadata about artifacts, such as when and by whom they were signed. This ledger aids in auditing and tracing the provenance of digital artifacts.
     - Timestamps: Time is a critical component of Sigstore. It’s used to verify that a short-lived certificate issued by Fulcio was valid at a previous point, when the artifact was signed.
@@ -109,13 +112,17 @@ flowchart TD
 
 ### Cosign Library Keyless Verify
 
-To verify a keyless signed cosign signature, you need to verify the following trust chain:
+To verify a keyless signed Cosign signature, you need to verify the following trust chain:
 
 - Check if the artifact matches what is described in the signature
 - Check if the OIDC identify (subject & issuer) matches what is described in the signature
 - Check if the certificate and the timestamp in signature are valid against Fulcio and Rekor
 - The root trust of Fulcio and Rekor is sourced from https://tuf-repo-cdn.sigstore.dev/
-- The root trust of https://tuf-repo-cdn.sigstore.dev/ is from the cosign binary
+- The root trust of https://tuf-repo-cdn.sigstore.dev/ is from the Cosign binary
+
+> [!NOTE]
+> With a short-lived certificate with timestamping, the trust has been completely shifted to Fulcio and Rekor of the Sigstore.
+> To resolve the TOFU issue of the TUF, Cosign pins the trust by embedding the current latest `root.json`, which contains the public key of the root role of the TUF, into the Cosign binary at the build time.
 
 #### Keyless Verify Input
 
@@ -133,7 +140,7 @@ The output format illustrates if the signature is valid and all criteria are met
 Sample output for the keyless verify
 The checks were performed:
 
-- The cosign claims were validated
+- The Cosign claims were validated
 - Existence of the claims in the transparency log was verified offline
 - The code-signing certificate was verified using trusted certificate authority certificates
 
@@ -169,12 +176,11 @@ The checks were performed:
 
 ### Cosign Library Key-based Verify
 
-To verify a keyless signed cosign signature, you need to verify the following trust chain:
+Cosign signs the artifact with the private key and upload the signature transparency log to the Rekor server `rekor.sigstore.dev`
+To verify a keyless signed Cosign signature, you need to verify the following trust chain:
 
 - Check if the artifact matches what is described in the signature
 - Check if the signature was created using the expected public key
-- The root trust of Fulcio and Rekor is sourced from https://tuf-repo-cdn.sigstore.dev/ (optional)
-- The root trust of https://tuf-repo-cdn.sigstore.dev/ is from the cosign binary (optional)
 
 #### Key-based Verify Input
 
@@ -192,7 +198,7 @@ To verify a keyless signed cosign signature, you need to verify the following tr
 Sample output for the key-based verify:
 The checks were performed:
 
-- The cosign claims were validated
+- The Cosign claims were validated
 - Existence of the claims in the transparency log was verified offline
 - The signatures were verified against the specified public key
 

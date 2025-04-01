@@ -89,8 +89,7 @@ flowchart TD
     - Public Key: The publicly disclosable component of a pair of cryptographic keys used for asymmetric cryptography.
     - Public-key Certificate: A public-key certificate binds a subject name to a public key value, along with information needed to perform certain cryptographic functions using that key.
     - Public-key Infrastructure (PKI): A system of CAs (and, optionally, RAs and other supporting servers and agents) that perform some set of certificate management, archive management, key management, and token management functions for a community of users in an application of asymmetric cryptography. The core PKI functions are (a) to register users and issue their public-key certificates, (b) to revoke certificates when required, and (c) to archive data needed to validate certificates at a much later time.
-    > [!NOTE]
-    > Cosign's keyless scenario does not follow the PKI model.
+    > **NOTE**: Cosign's keyless scenario does not follow the PKI model.
     - Root CA: The root CA in a certification hierarchy issues public-key certificates to one or more additional CAs that form the second-highest level. Each of these CAs may issue certificates to more CAs at the third-highest level, and so on. To initialize operation of a hierarchical PKI, the root's initial public key is securely distributed to all certificate users in a way that does not depend on the PKI's certification relationships.
     - Root of Trust: Sigstore’s root of trust, which includes Fulcio’s root CA certificate and Rekor’s public key, are distributed by The Update Framework (TUF). TUF is a framework to provide secure software and file updates.
     - Trust Anchor: A trust anchor may be defined as being based on a public key, a CA, a public-key certificate, or some combination or variation of those. The trusted anchor information is trusted because it was delivered to the path processing procedure by some trustworthy out-of-band procedure.
@@ -115,7 +114,7 @@ flowchart TD
 To verify a keyless signed Cosign signature, you need to verify the following trust chain:
 
 - Check if the artifact matches what is described in the signature
-- Check if the OIDC identify (subject & issuer) matches what is described in the signature
+- Check if the OIDC identity (subject & issuer) matches what is described in the signature
 - Check if the certificate and the timestamp in signature are valid against Fulcio and Rekor
 - The root trust of Fulcio and Rekor is sourced from https://tuf-repo-cdn.sigstore.dev/
 - The root trust of https://tuf-repo-cdn.sigstore.dev/ is from the Cosign binary
@@ -131,14 +130,14 @@ To verify a keyless signed Cosign signature, you need to verify the following tr
 
 2. Verification Materials
     - Identity Parameters: Restrict verification to specific OIDC identities. Valid values include email address, DNS names, IP addresses, and URIs.
-    - OIDC Issuer Parameters: Ensure the certificate was issued by a specific OIDC provider, without Fulcio roots (for BYO PKI).
+    - OIDC Issuer Parameters: Ensure the certificate was issued by a specific OIDC provider.
+    > **NOTE**: Non-Fulcio roots are supported in bring your own (BYO) PKI scenario.
 
 #### Keyless Verify Output
 
 The output format illustrates if the signature is valid and all criteria are met.
 
-Sample output for the keyless verify
-The checks were performed:
+Here is a sample output for the keyless verify, and following checks were performed:
 
 - The Cosign claims were validated
 - Existence of the claims in the transparency log was verified offline
@@ -177,7 +176,7 @@ The checks were performed:
 ### Cosign Library Key-based Verify
 
 Cosign signs the artifact with the private key and upload the signature transparency log to the Rekor server `rekor.sigstore.dev`
-To verify a keyless signed Cosign signature, you need to verify the following trust chain:
+To verify a key-based signed Cosign signature, you need to verify the following trust chain:
 
 - Check if the artifact matches what is described in the signature
 - Check if the signature was created using the expected public key
@@ -195,8 +194,7 @@ To verify a keyless signed Cosign signature, you need to verify the following tr
 
 #### Key-based Verify Output
 
-Sample output for the key-based verify:
-The checks were performed:
+Here is a sample output for the key-based verify, and following checks were performed:
 
 - The Cosign claims were validated
 - Existence of the claims in the transparency log was verified offline

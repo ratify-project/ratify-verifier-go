@@ -1,12 +1,12 @@
-module github.com/ratify-project/ratify-verifier-go/notation
+module github.com/notaryproject/ratify-verifier-go/notation
 
 go 1.23.0
 
 require (
 	github.com/notaryproject/notation-core-go v1.3.0
 	github.com/notaryproject/notation-go v1.3.2
+	github.com/notaryproject/ratify-go v0.0.0-20250523033553-c475c86f66c4
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/ratify-project/ratify-go v0.0.0-20250514044432-d567dd8b7b57
 )
 
 require (

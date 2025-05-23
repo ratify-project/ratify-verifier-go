@@ -27,8 +27,8 @@ import (
 	"github.com/notaryproject/notation-go"
 	"github.com/notaryproject/notation-go/verifier/trustpolicy"
 	"github.com/notaryproject/notation-go/verifier/truststore"
+	"github.com/notaryproject/ratify-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/ratify-project/ratify-go"
 )
 
 const (
